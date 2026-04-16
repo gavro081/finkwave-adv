@@ -47,7 +47,9 @@ CREATE TABLE Label_Admins (
     user_id BIGINT NOT NULL,
 
     FOREIGN KEY (label_id) REFERENCES Labels(id),
-    FOREIGN KEY (user_id) REFERENCES Users(id)
+    FOREIGN KEY (user_id) REFERENCES Users(id),
+
+    CONSTRAINT unique_user_admin UNIQUE (user_id)
 );
 
 CREATE TABLE Artists (
@@ -74,10 +76,16 @@ CREATE TABLE User_Roles (
 );
 
 
+
 CREATE TABLE Permissions (
     id BIGSERIAL PRIMARY KEY,
     action VARCHAR(255) NOT NULL,
-    resource_type VARCHAR(255) NOT NULL
+    resource_type VARCHAR(255) NOT NULL,
+    scope VARCHAR(32) NOT NULL,
+
+    CONSTRAINT scope_constraint CHECK ( scope in ('ANY','PUBLIC','SHARED','OWN')),
+    CONSTRAINT resource_type_constraint CHECK ( resource_type in ('SONG','ALBUM','PLAYLIST')),
+    CONSTRAINT action_constraint CHECK ( action in ('CREATE','EDIT','PLAY', 'VIEW','DELETE','SHARE','ADD_SONG','REMOVE_SONG'))
 );
 
 CREATE TABLE Role_Permissions (
@@ -86,7 +94,9 @@ CREATE TABLE Role_Permissions (
     role_id BIGINT NOT NULL,
 
     FOREIGN KEY (permission_id) REFERENCES Permissions(id),
-    FOREIGN KEY (role_id) REFERENCES Roles(id)
+    FOREIGN KEY (role_id) REFERENCES Roles(id),
+
+    UNIQUE (role_id,permission_id)
 );
 
 CREATE TABLE Songs (
@@ -122,6 +132,8 @@ CREATE TABLE Follows (
 
     FOREIGN KEY (follower_user_id) REFERENCES Users(id) ON DELETE CASCADE,
     FOREIGN KEY (followed_user_id) REFERENCES Users(id) ON DELETE CASCADE,
+
+    CONSTRAINT no_self_follow CHECK ( follower_user_id<>followed_user_id ),
 
     UNIQUE (follower_user_id, followed_user_id)
 );
@@ -287,12 +299,10 @@ CREATE TABLE Reviews (
 CREATE TABLE Resource_Shares (
     id BIGSERIAL PRIMARY KEY,
 
-    -- resource id
     song_id BIGINT REFERENCES songs(id),
     album_id BIGINT REFERENCES albums(id),
     playlist_id BIGINT REFERENCES playlists(id),
 
-    -- subject id
     user_id BIGINT REFERENCES users(id),
     role_id BIGINT REFERENCES roles(id),
 
@@ -324,4 +334,3 @@ CREATE TABLE Resource_Shares (
         (role_id IS NOT NULL)::int = 1
     )
 );
-
