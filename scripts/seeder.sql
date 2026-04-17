@@ -58,7 +58,7 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
 JOIN permissions p ON (
-    -- Song
+    -- SONG
     (p.action = 'PLAY' AND p.resource_type = 'SONG' AND p.scope = 'PUBLIC' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'PLAY' AND p.resource_type = 'SONG' AND p.scope = 'SHARED' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN')) OR
     (p.action = 'PLAY' AND p.resource_type = 'SONG' AND p.scope = 'OWN' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN')) OR
@@ -74,7 +74,7 @@ JOIN permissions p ON (
     (p.action = 'EDIT' AND p.resource_type = 'SONG' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
     (p.action = 'DELETE' AND p.resource_type = 'SONG' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
 
-    -- Album
+    -- ALBUM
     (p.action = 'VIEW' AND p.resource_type = 'ALBUM' AND p.scope = 'PUBLIC' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'ALBUM' AND p.scope = 'SHARED' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'ALBUM' AND p.scope = 'OWN' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN')) OR
@@ -86,7 +86,7 @@ JOIN permissions p ON (
     (p.action = 'EDIT' AND p.resource_type = 'ALBUM' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
     (p.action = 'DELETE' AND p.resource_type = 'ALBUM' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
 
-    -- Playlist
+    -- PLAYLIST
     (p.action = 'VIEW' AND p.resource_type = 'PLAYLIST' AND p.scope = 'PUBLIC' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'PLAYLIST' AND p.scope = 'SHARED' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'PLAYLIST' AND p.scope = 'OWN' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
@@ -218,5 +218,276 @@ SELECT DISTINCT *
 FROM generated
 WHERE follower_user_id <> followed_user_id
 LIMIT 100000;
+
+
+
+
+WITH artist_followers AS (
+    SELECT
+        a.id AS artist_id,
+        COUNT(f.follower_user_id) AS follower_count
+    FROM Artists a
+    LEFT JOIN Follows f
+        ON f.followed_user_id = a.user_id
+    GROUP BY a.id
+),
+ranked AS (
+    SELECT *,
+           NTILE(10) OVER (ORDER BY follower_count DESC) AS popularity_bucket
+    FROM artist_followers
+),
+selected AS (
+    SELECT *
+    FROM ranked
+    WHERE popularity_bucket <= 3
+)
+INSERT INTO Artist_Labels (artist_id, label_id, active, start_date, end_date)
+SELECT
+    s.artist_id,
+    s.artist_id%375+1,
+    TRUE,
+    CURRENT_DATE - (random() * 3650)::int,
+    NULL
+FROM selected s;
+
+
+select label_id,count(*) from artist_labels
+group by label_id;
+
+delete from artist_labels;
+
+select count(*) from artist_labels;
+
+
+WITH artist_followers AS (
+    SELECT
+        a.id AS artist_id,
+        a.user_id,
+        COUNT(f.follower_user_id) AS follower_count
+    FROM Artists a
+    LEFT JOIN Follows f
+        ON f.followed_user_id = a.user_id
+    GROUP BY a.id, a.user_id
+),
+artist_labels_active AS (
+    SELECT al.artist_id, al.label_id
+    FROM Artist_Labels al
+    WHERE al.active = TRUE
+),
+artist_full AS (
+    SELECT
+        af.artist_id,
+        af.follower_count,
+        al.label_id,
+        la.id AS label_admin_id
+    FROM artist_followers af
+    LEFT JOIN artist_labels_active al
+        ON af.artist_id = al.artist_id
+    LEFT JOIN Label_Admins la
+        ON la.label_id = al.label_id
+),
+expanded AS (
+    SELECT
+        af.*,
+        generate_series(
+            1,
+            CASE
+                WHEN af.follower_count > 1200 THEN 100
+                ELSE (floor(random() * 40))::int -- 0-39
+            END
+        ) AS song_num
+    FROM artist_full af
+)
+INSERT INTO Songs (
+    title,
+    visibility,
+    owner_artist_id,
+    published_by_artist_id,
+    published_by_label_admin_id,
+    genre
+)
+SELECT
+    -- random title
+    'Song_' || artist_id || '_' || song_num,
+
+    -- random visibility
+    (ARRAY['PUBLIC','PRIVATE'])[floor(random()*2)+1],
+
+    -- owner
+    artist_id,
+
+    -- published_by_artist_id (ONLY if no label)
+    CASE
+        WHEN label_id IS NULL THEN artist_id
+        ELSE NULL
+    END,
+
+    -- published_by_label_admin_id (ONLY if label exists)
+    CASE
+        WHEN label_id IS NOT NULL THEN label_admin_id
+        ELSE NULL
+    END,
+
+    NULL
+FROM expanded;
+
+
+WITH artist_followers AS (
+    SELECT
+        a.id AS artist_id,
+        COUNT(f.follower_user_id) AS follower_count
+    FROM Artists a
+    LEFT JOIN Follows f
+        ON f.followed_user_id = a.user_id
+    GROUP BY a.id
+),
+artist_labels_active AS (
+    SELECT artist_id, label_id
+    FROM Artist_Labels
+    WHERE active = TRUE
+),
+artist_full AS (
+    SELECT
+        af.artist_id,
+        af.follower_count,
+        al.label_id,
+        la.id AS label_admin_id
+    FROM artist_followers af
+    LEFT JOIN artist_labels_active al
+        ON af.artist_id = al.artist_id
+    LEFT JOIN Label_Admins la
+        ON la.label_id = al.label_id
+),
+expanded AS (
+    SELECT
+        af.*,
+        generate_series(
+            1,
+            CASE
+                WHEN af.follower_count > 1200
+                    THEN (5 + floor(random() * 6))::int   -- 5–10
+                ELSE (1 + floor(random() * 3))::int       -- 1–3
+            END
+        ) AS album_num
+    FROM artist_full af
+)
+INSERT INTO Albums (
+    title,
+    visibility,
+    owner_artist_id,
+    published_by_artist_id,
+    published_by_label_admin_id
+)
+SELECT
+    'Album_' || artist_id || '_' || album_num,
+
+    (ARRAY['PUBLIC','PRIVATE'])[floor(random()*2)+1],
+
+    artist_id,
+
+    -- solo artists publish themselves
+    CASE
+        WHEN label_id IS NULL THEN artist_id
+        ELSE NULL
+    END,
+
+    -- label artists published by label
+    CASE
+        WHEN label_id IS NOT NULL THEN label_admin_id
+        ELSE NULL
+    END
+
+FROM expanded
+WHERE (label_id IS NULL OR label_admin_id IS NOT NULL);
+
+
+select count(*) from(
+select owner_artist_id,count(*) from albums
+group by owner_artist_id);
+
+
+
+-- select count(f.follower_user_id)
+-- from albums a
+-- join follows f on a.owner_artist_id=f.followed_user_id
+-- group by a.owner_artist_id
+-- order by count(f.follower_user_id)desc ;
+
+
+
+WITH song_album_match AS (
+    SELECT
+        s.id AS song_id,
+        al.id AS album_id,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY s.id
+            ORDER BY random()
+        ) AS rn
+
+    FROM Songs s
+    JOIN Albums al
+      ON al.owner_artist_id = s.owner_artist_id
+     AND (
+            (al.published_by_artist_id IS NOT NULL AND s.published_by_artist_id IS NOT NULL)
+         OR (al.published_by_label_admin_id IS NOT NULL AND s.published_by_label_admin_id IS NOT NULL)
+     )
+),
+chosen AS (
+    -- pick ONE album per song
+    SELECT song_id, album_id
+    FROM song_album_match
+    WHERE rn = 1
+), album_limits AS (
+    SELECT
+        id AS album_id,
+        (8 + floor(random() * 8))::int AS max_tracks
+    FROM Albums
+),
+ranked AS (
+    SELECT
+        c.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.album_id
+            ORDER BY random()
+        ) AS rn
+    FROM chosen c
+),
+limited AS (
+    SELECT r.*
+    FROM ranked r
+    JOIN album_limits l ON r.album_id = l.album_id
+    WHERE r.rn <= l.max_tracks
+)
+INSERT INTO Album_Tracks (album_id, song_id, track_number)
+SELECT
+    album_id,
+    song_id,
+    ROW_NUMBER() OVER (
+        PARTITION BY album_id
+        ORDER BY rn
+    )
+FROM limited;
+
+select *
+from album_tracks at1
+where exists(
+    select 1
+    from album_tracks at2
+    where at1.song_id=at2.song_id
+    and at1.album_id<>at2.album_id
+
+);
+
+select *
+from album_tracks limit 20;
+
+select count(*)
+from (select id
+from songs
+except
+select s.id from songs s
+join album_tracks at on at.song_id=s.id) as sisai;
+
 
 
