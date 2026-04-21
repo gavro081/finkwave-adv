@@ -1,13 +1,9 @@
 INSERT INTO Users (username, email, password, full_name, last_login)
 SELECT
     substr(md5(random()::text), 1, 12),
-
     substr(md5(random()::text), 1, 10) || '@gmail.com',
-
     'password123',
-
     'John Doe',
-
     now()
 FROM generate_series(1, 1000000)
 ON CONFLICT DO NOTHING;
@@ -57,7 +53,7 @@ INSERT INTO Permissions (action, resource_type, scope) VALUES
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
-JOIN permissions p ON (
+         JOIN permissions p ON (
     -- SONG
     (p.action = 'PLAY' AND p.resource_type = 'SONG' AND p.scope = 'PUBLIC' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'PLAY' AND p.resource_type = 'SONG' AND p.scope = 'SHARED' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN')) OR
@@ -74,7 +70,7 @@ JOIN permissions p ON (
     (p.action = 'EDIT' AND p.resource_type = 'SONG' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
     (p.action = 'DELETE' AND p.resource_type = 'SONG' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
 
-    -- ALBUM
+        -- ALBUM
     (p.action = 'VIEW' AND p.resource_type = 'ALBUM' AND p.scope = 'PUBLIC' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'ALBUM' AND p.scope = 'SHARED' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'ALBUM' AND p.scope = 'OWN' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN')) OR
@@ -86,7 +82,7 @@ JOIN permissions p ON (
     (p.action = 'EDIT' AND p.resource_type = 'ALBUM' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
     (p.action = 'DELETE' AND p.resource_type = 'ALBUM' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN')) OR
 
-    -- PLAYLIST
+        -- PLAYLIST
     (p.action = 'VIEW' AND p.resource_type = 'PLAYLIST' AND p.scope = 'PUBLIC' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'PLAYLIST' AND p.scope = 'SHARED' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
     (p.action = 'VIEW' AND p.resource_type = 'PLAYLIST' AND p.scope = 'OWN' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
@@ -100,14 +96,14 @@ JOIN permissions p ON (
     (p.action = 'SHARE' AND p.resource_type = 'PLAYLIST' AND p.scope = 'OWN' AND r.role_name IN ('ADMIN','ARTIST','LABEL_ADMIN','FREE_LISTENER','PREMIUM_LISTENER')) OR
 
     (p.action = 'DELETE' AND p.resource_type = 'PLAYLIST' AND p.scope = 'ANY' AND r.role_name IN ('ADMIN','LABEL_ADMIN'))
-);
+    );
 
 
 INSERT INTO Labels (name)
 SELECT (
-    substr(md5(random()::text), 1, 12)
+           substr(md5(random()::text), 1, 12)
 
-    )
+           )
 FROM generate_series(1, 375);
 
 
@@ -127,7 +123,7 @@ WITH selected_users AS (
     FROM Users
     ORDER BY id
     OFFSET 100000
-    LIMIT 375
+        LIMIT 375
 )
 INSERT INTO Label_Admins (label_id, user_id)
 SELECT
@@ -160,7 +156,7 @@ SELECT
     CASE
         WHEN (row_number() OVER (ORDER BY id)) % 3 = 0 THEN 3
         ELSE 2
-    END
+        END
 FROM Users
 WHERE id BETWEEN 100376 AND 999999;
 
@@ -192,7 +188,7 @@ WITH generated AS (
                 floor(random() * (1000000 - 100375))::bigint + 100376
             ELSE
                 floor(random() * 100000)::bigint + 1
-        END AS follower_user_id,
+            END AS follower_user_id,
 
         -- followed
         CASE
@@ -204,11 +200,11 @@ WITH generated AS (
                     ELSE
                         -- remaining
                         floor(random() * (100000 - 40))::bigint + 41
-                END
+                    END
             ELSE
                 -- listeners
                 floor(random() * (1000000 - 100375))::bigint + 100376
-        END AS followed_user_id
+            END AS followed_user_id
 
     FROM generate_series(1, 200000)
 )
@@ -227,20 +223,20 @@ WITH artist_followers AS (
         a.id AS artist_id,
         COUNT(f.follower_user_id) AS follower_count
     FROM Artists a
-    LEFT JOIN Follows f
-        ON f.followed_user_id = a.user_id
+             LEFT JOIN Follows f
+                       ON f.followed_user_id = a.user_id
     GROUP BY a.id
 ),
-ranked AS (
-    SELECT *,
-           NTILE(10) OVER (ORDER BY follower_count DESC) AS popularity_bucket
-    FROM artist_followers
-),
-selected AS (
-    SELECT *
-    FROM ranked
-    WHERE popularity_bucket <= 3
-)
+     ranked AS (
+         SELECT *,
+                NTILE(10) OVER (ORDER BY follower_count DESC) AS popularity_bucket
+         FROM artist_followers
+     ),
+     selected AS (
+         SELECT *
+         FROM ranked
+         WHERE popularity_bucket <= 3
+     )
 INSERT INTO Artist_Labels (artist_id, label_id, active, start_date, end_date)
 SELECT
     s.artist_id,
@@ -254,7 +250,7 @@ FROM selected s;
 select label_id,count(*) from artist_labels
 group by label_id;
 
-delete from artist_labels;
+-- delete from artist_labels;
 
 select count(*) from artist_labels;
 
@@ -265,39 +261,39 @@ WITH artist_followers AS (
         a.user_id,
         COUNT(f.follower_user_id) AS follower_count
     FROM Artists a
-    LEFT JOIN Follows f
-        ON f.followed_user_id = a.user_id
+             LEFT JOIN Follows f
+                       ON f.followed_user_id = a.user_id
     GROUP BY a.id, a.user_id
 ),
-artist_labels_active AS (
-    SELECT al.artist_id, al.label_id
-    FROM Artist_Labels al
-    WHERE al.active = TRUE
-),
-artist_full AS (
-    SELECT
-        af.artist_id,
-        af.follower_count,
-        al.label_id,
-        la.id AS label_admin_id
-    FROM artist_followers af
-    LEFT JOIN artist_labels_active al
-        ON af.artist_id = al.artist_id
-    LEFT JOIN Label_Admins la
-        ON la.label_id = al.label_id
-),
-expanded AS (
-    SELECT
-        af.*,
-        generate_series(
-            1,
-            CASE
-                WHEN af.follower_count > 1200 THEN 100
-                ELSE (floor(random() * 40))::int -- 0-39
-            END
-        ) AS song_num
-    FROM artist_full af
-)
+     artist_labels_active AS (
+         SELECT al.artist_id, al.label_id
+         FROM Artist_Labels al
+         WHERE al.active = TRUE
+     ),
+     artist_full AS (
+         SELECT
+             af.artist_id,
+             af.follower_count,
+             al.label_id,
+             la.id AS label_admin_id
+         FROM artist_followers af
+                  LEFT JOIN artist_labels_active al
+                            ON af.artist_id = al.artist_id
+                  LEFT JOIN Label_Admins la
+                            ON la.label_id = al.label_id
+     ),
+     expanded AS (
+         SELECT
+             af.*,
+             generate_series(
+                     1,
+                     CASE
+                         WHEN af.follower_count > 1200 THEN 100
+                         ELSE (floor(random() * 40))::int -- 0-39
+                         END
+             ) AS song_num
+         FROM artist_full af
+     )
 INSERT INTO Songs (
     title,
     visibility,
@@ -320,13 +316,13 @@ SELECT
     CASE
         WHEN label_id IS NULL THEN artist_id
         ELSE NULL
-    END,
+        END,
 
     -- published_by_label_admin_id (ONLY if label exists)
     CASE
         WHEN label_id IS NOT NULL THEN label_admin_id
         ELSE NULL
-    END,
+        END,
 
     NULL
 FROM expanded;
@@ -337,40 +333,40 @@ WITH artist_followers AS (
         a.id AS artist_id,
         COUNT(f.follower_user_id) AS follower_count
     FROM Artists a
-    LEFT JOIN Follows f
-        ON f.followed_user_id = a.user_id
+             LEFT JOIN Follows f
+                       ON f.followed_user_id = a.user_id
     GROUP BY a.id
 ),
-artist_labels_active AS (
-    SELECT artist_id, label_id
-    FROM Artist_Labels
-    WHERE active = TRUE
-),
-artist_full AS (
-    SELECT
-        af.artist_id,
-        af.follower_count,
-        al.label_id,
-        la.id AS label_admin_id
-    FROM artist_followers af
-    LEFT JOIN artist_labels_active al
-        ON af.artist_id = al.artist_id
-    LEFT JOIN Label_Admins la
-        ON la.label_id = al.label_id
-),
-expanded AS (
-    SELECT
-        af.*,
-        generate_series(
-            1,
-            CASE
-                WHEN af.follower_count > 1200
-                    THEN (5 + floor(random() * 6))::int   -- 5–10
-                ELSE (1 + floor(random() * 3))::int       -- 1–3
-            END
-        ) AS album_num
-    FROM artist_full af
-)
+     artist_labels_active AS (
+         SELECT artist_id, label_id
+         FROM Artist_Labels
+         WHERE active = TRUE
+     ),
+     artist_full AS (
+         SELECT
+             af.artist_id,
+             af.follower_count,
+             al.label_id,
+             la.id AS label_admin_id
+         FROM artist_followers af
+                  LEFT JOIN artist_labels_active al
+                            ON af.artist_id = al.artist_id
+                  LEFT JOIN Label_Admins la
+                            ON la.label_id = al.label_id
+     ),
+     expanded AS (
+         SELECT
+             af.*,
+             generate_series(
+                     1,
+                     CASE
+                         WHEN af.follower_count > 1200
+                             THEN (5 + floor(random() * 6))::int   -- 5–10
+                         ELSE (1 + floor(random() * 3))::int       -- 1–3
+                         END
+             ) AS album_num
+         FROM artist_full af
+     )
 INSERT INTO Albums (
     title,
     visibility,
@@ -389,21 +385,21 @@ SELECT
     CASE
         WHEN label_id IS NULL THEN artist_id
         ELSE NULL
-    END,
+        END,
 
     -- label artists published by label
     CASE
         WHEN label_id IS NOT NULL THEN label_admin_id
         ELSE NULL
-    END
+        END
 
 FROM expanded
 WHERE (label_id IS NULL OR label_admin_id IS NOT NULL);
 
 
 select count(*) from(
-select owner_artist_id,count(*) from albums
-group by owner_artist_id);
+                        select owner_artist_id,count(*) from albums
+                        group by owner_artist_id);
 
 
 
@@ -423,42 +419,42 @@ WITH song_album_match AS (
         ROW_NUMBER() OVER (
             PARTITION BY s.id
             ORDER BY random()
-        ) AS rn
+            ) AS rn
 
     FROM Songs s
-    JOIN Albums al
-      ON al.owner_artist_id = s.owner_artist_id
-     AND (
-            (al.published_by_artist_id IS NOT NULL AND s.published_by_artist_id IS NOT NULL)
-         OR (al.published_by_label_admin_id IS NOT NULL AND s.published_by_label_admin_id IS NOT NULL)
-     )
+             JOIN Albums al
+                  ON al.owner_artist_id = s.owner_artist_id
+                      AND (
+                         (al.published_by_artist_id IS NOT NULL AND s.published_by_artist_id IS NOT NULL)
+                             OR (al.published_by_label_admin_id IS NOT NULL AND s.published_by_label_admin_id IS NOT NULL)
+                         )
 ),
-chosen AS (
-    -- pick ONE album per song
-    SELECT song_id, album_id
-    FROM song_album_match
-    WHERE rn = 1
-), album_limits AS (
+     chosen AS (
+         -- pick ONE album per song
+         SELECT song_id, album_id
+         FROM song_album_match
+         WHERE rn = 1
+     ), album_limits AS (
     SELECT
         id AS album_id,
         (8 + floor(random() * 8))::int AS max_tracks
     FROM Albums
 ),
-ranked AS (
-    SELECT
-        c.*,
-        ROW_NUMBER() OVER (
-            PARTITION BY c.album_id
-            ORDER BY random()
-        ) AS rn
-    FROM chosen c
-),
-limited AS (
-    SELECT r.*
-    FROM ranked r
-    JOIN album_limits l ON r.album_id = l.album_id
-    WHERE r.rn <= l.max_tracks
-)
+     ranked AS (
+         SELECT
+             c.*,
+             ROW_NUMBER() OVER (
+                 PARTITION BY c.album_id
+                 ORDER BY random()
+                 ) AS rn
+         FROM chosen c
+     ),
+     limited AS (
+         SELECT r.*
+         FROM ranked r
+                  JOIN album_limits l ON r.album_id = l.album_id
+         WHERE r.rn <= l.max_tracks
+     )
 INSERT INTO Album_Tracks (album_id, song_id, track_number)
 SELECT
     album_id,
@@ -466,7 +462,7 @@ SELECT
     ROW_NUMBER() OVER (
         PARTITION BY album_id
         ORDER BY rn
-    )
+        )
 FROM limited;
 
 select *
@@ -475,7 +471,7 @@ where exists(
     select 1
     from album_tracks at2
     where at1.song_id=at2.song_id
-    and at1.album_id<>at2.album_id
+      and at1.album_id<>at2.album_id
 
 );
 
@@ -484,10 +480,10 @@ from album_tracks limit 20;
 
 select count(*)
 from (select id
-from songs
-except
-select s.id from songs s
-join album_tracks at on at.song_id=s.id) as sisai;
+      from songs
+      except
+      select s.id from songs s
+                           join album_tracks at on at.song_id=s.id) as sisai;
 
 
 
@@ -501,13 +497,13 @@ FROM generate_series(1, 10000) gs;
 
 select * from playlists;
 
-delete from playlists;
+-- delete from playlists;
 select distinct rnd
 from users
-cross join lateral (
+         cross join lateral (
     select random() as rnd from albums
-                    limit 10
-) as ar
+    limit 10
+    ) as ar
 
 limit 100;
 
@@ -515,116 +511,170 @@ limit 100;
 WITH non_artist_users AS (
     SELECT u.id
     FROM Users u
-    LEFT JOIN Artists a ON u.id = a.user_id
+             LEFT JOIN Artists a ON u.id = a.user_id
     WHERE a.user_id IS NULL
 ),
 
 -- shuffle users once
-shuffled_users AS (
-    SELECT id, row_number() OVER () AS rn
-    FROM non_artist_users
-    ORDER BY random()
-),
+     shuffled_users AS (
+         SELECT id, row_number() OVER () AS rn
+         FROM non_artist_users
+         ORDER BY random()
+     ),
 
-user_count AS (
-    SELECT count(*) AS cnt FROM shuffled_users
-),
+     user_count AS (
+         SELECT count(*) AS cnt FROM shuffled_users
+     ),
 
-playlist_sample AS (
-    SELECT id AS playlist_id, creator_user_id
-    FROM Playlists
-    ORDER BY random()
-    LIMIT 5000
-),
+     playlist_sample AS (
+         SELECT id AS playlist_id, creator_user_id
+         FROM Playlists
+         ORDER BY random()
+         LIMIT 5000
+     ),
 
-expanded AS (
-    SELECT
-        p.playlist_id,
-        p.creator_user_id,
+     expanded AS (
+         SELECT
+             p.playlist_id,
+             p.creator_user_id,
 
-        generate_series(
-            1,
-            GREATEST(
-                1,
-                LEAST(
-                    20,
-                    ((random() + random() + random()) * 5)::int
-                )
-            )
-        ) AS save_instance
-    FROM playlist_sample p
-),
+             generate_series(
+                     1,
+                     GREATEST(
+                             1,
+                             LEAST(
+                                     20,
+                                     ((random() + random() + random()) * 5)::int
+                             )
+                     )
+             ) AS save_instance
+         FROM playlist_sample p
+     ),
 
 -- ✅ compute row_number HERE (legal)
-expanded_numbered AS (
-    SELECT
-        e.*,
-        row_number() OVER () AS rn
-    FROM expanded e
-),
-
-assigned AS (
-    SELECT
-        e.playlist_id,
-        u.id AS saved_by
-    FROM expanded_numbered e
-    JOIN user_count uc ON TRUE
-    JOIN shuffled_users u
-      ON u.rn = ((e.rn % uc.cnt) + 1)
-    WHERE u.id <> e.creator_user_id
-)
+     expanded_numbered AS (
+         SELECT
+             e.*,
+             row_number() OVER () AS rn
+         FROM expanded e
+     ),
+     assigned AS (
+         SELECT
+             e.playlist_id,
+             u.id AS saved_by
+         FROM expanded_numbered e
+                  JOIN user_count uc ON TRUE
+                  JOIN shuffled_users u
+                       ON u.rn = ((e.rn % uc.cnt) + 1)
+         WHERE u.id <> e.creator_user_id
+     )
 
 INSERT INTO Saved_Playlists (playlist_id, saved_by)
 SELECT DISTINCT playlist_id, saved_by
 FROM assigned
 LIMIT 5000;
 
-
 select saved_by,count(*)
 from saved_playlists
 group by saved_by
 order by count(*)desc ;
 
-delete from saved_playlists;
-
-
-
-
-
---- Do tuka
-WITH song_pool AS (
+INSERT INTO playlist_tracks (playlist_id, song_id)
+SELECT p.id,
+       s.id
+FROM Playlists p
+    CROSS JOIN LATERAL (
     SELECT id
-    FROM Songs
-),
+    FROM Songs TABLESAMPLE SYSTEM (0.5)   -- sample ~0.5% (~10k rows)
+    ORDER BY random() * (1.0 / sqrt(id)) + p.id * 0
+    LIMIT (5 + floor(random() * 16))
+    ) s;
 
-song_count AS (
-    SELECT count(*) AS cnt FROM song_pool
-),
-
-playlist_sample AS (
-    SELECT id AS playlist_id
-    FROM Playlists
-),
-
-expanded AS (
-    SELECT
-        p.playlist_id,
-        (1 + floor(random() * 20))::int AS song_count,
-        floor(random() * 1000000)::int AS seed   -- one random seed per playlist
-    FROM playlist_sample p
+WITH song_count AS (
+    SELECT COUNT(*) AS cnt FROM Songs
 )
-
-INSERT INTO Playlist_Tracks (playlist_id, song_id)
-SELECT DISTINCT
-    e.playlist_id,
-    s.id
-FROM expanded e
-JOIN song_count sc ON TRUE
-JOIN song_pool s
-  ON s.id % sc.cnt < e.song_count
-WHERE s.id <> 0;
+INSERT INTO Reviews (user_id, song_id, grade)
+SELECT
+    (100001 + floor(random() * (999999 - 100001 + 1)))::bigint AS user_id,
+    (1 + floor(random() * sc.cnt))::bigint AS song_id,
+    (1 + floor(random() * 5))::int AS grade
+FROM generate_series(1, 100000),
+    song_count sc;
 
 
-select count(song_id)
-from playlist_tracks pt
-group by pt.playlist_id
+
+WITH song_count AS (
+    SELECT COUNT(*) AS cnt FROM Songs
+),
+
+     generated AS (
+         SELECT
+             user_id,
+             song_id,
+             started_at,
+             listened_ms,
+             listened_ms AS last_position_ms
+         FROM (
+                  SELECT
+                      (100001 + floor(random() * (999999 - 100001 + 1)))::bigint AS user_id,
+
+                      CASE
+                          WHEN random() < 0.6 THEN
+                              floor(random() * (cnt * 0.05))::bigint + 1
+                          WHEN random() < 0.85 THEN
+                              floor(random() * (cnt * 0.15))::bigint + (cnt * 0.05)::bigint + 1
+                          ELSE
+                              floor(random() * (cnt * 0.80))::bigint + (cnt * 0.20)::bigint + 1
+                          END AS song_id,
+
+                      NOW() - (random() * INTERVAL '6 months') AS started_at,
+
+                      -- computed once per row
+                      (20 + floor(random() * 31))::int AS listened_ms
+
+                  FROM generate_series(1, 1500000), song_count
+              ) t
+     )
+
+INSERT INTO Playback_Sessions (
+    user_id,
+    song_id,
+    started_at,
+    listened_ms,
+    last_position_ms
+)
+SELECT *
+FROM generated;
+
+INSERT INTO Song_Streams (
+    playback_session_id,
+    song_id,
+    streamed_at
+)
+SELECT
+    ps.id,
+    ps.song_id,
+    ps.started_at
+FROM Playback_Sessions ps
+WHERE ps.listened_ms >= 30;
+
+insert into song_relationships (source_song_id, target_song_id, relationship_type)
+VALUES (1951937, 1951936, 'REMIX'),
+       (1, 2, 'REMIX');
+
+insert into song_contributors (song_id, artist_id, role, credit_order)
+VALUES
+    (82183, 71535, 'BACK VOCAL', 2),
+    (82183, 84285, 'PRODUCER', 3);
+
+-- create shared playlist for user 100002
+insert into playlists (visibility, creator_user_id, playlist_name, description)
+values ('SHARED', 100002, 'shared playlist', 'this is a shared playlist');
+
+-- add some songs to the new shared playlist
+insert into playlist_tracks (song_id, playlist_id)
+VALUES (1, 10001), (2, 10001), (3, 10001);
+
+-- give VIEW PLAYLIST access to user 100003
+insert into resource_shares (playlist_id, user_id, permission_id)
+values (10001, 100003, 21);

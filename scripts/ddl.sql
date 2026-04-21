@@ -293,7 +293,7 @@ CREATE TABLE Reviews (
 
     FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
     FOREIGN KEY (song_id) REFERENCES Songs(id) ON DELETE CASCADE,
-    CONSTRAINT grade_valid CHECK ( grade BETWEEN 1 and 5)
+    CONSTRAINT grade_valid CHECK ( grade BETWEEN 1 and 5),
 );
 
 CREATE TABLE Resource_Shares (
