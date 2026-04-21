@@ -491,3 +491,140 @@ join album_tracks at on at.song_id=s.id) as sisai;
 
 
 
+INSERT INTO Playlists (playlist_name, visibility, creator_user_id)
+SELECT
+    'Playlist_' || (floor(random() * 899999)::int + 100001) || '_' || gs,
+    CASE WHEN random() < 0.7 THEN 'PUBLIC' ELSE 'PRIVATE' END,
+    floor(random() * 899999)::int + 100001
+FROM generate_series(1, 10000) gs;
+
+
+select * from playlists;
+
+delete from playlists;
+select distinct rnd
+from users
+cross join lateral (
+    select random() as rnd from albums
+                    limit 10
+) as ar
+
+limit 100;
+
+
+WITH non_artist_users AS (
+    SELECT u.id
+    FROM Users u
+    LEFT JOIN Artists a ON u.id = a.user_id
+    WHERE a.user_id IS NULL
+),
+
+-- shuffle users once
+shuffled_users AS (
+    SELECT id, row_number() OVER () AS rn
+    FROM non_artist_users
+    ORDER BY random()
+),
+
+user_count AS (
+    SELECT count(*) AS cnt FROM shuffled_users
+),
+
+playlist_sample AS (
+    SELECT id AS playlist_id, creator_user_id
+    FROM Playlists
+    ORDER BY random()
+    LIMIT 5000
+),
+
+expanded AS (
+    SELECT
+        p.playlist_id,
+        p.creator_user_id,
+
+        generate_series(
+            1,
+            GREATEST(
+                1,
+                LEAST(
+                    20,
+                    ((random() + random() + random()) * 5)::int
+                )
+            )
+        ) AS save_instance
+    FROM playlist_sample p
+),
+
+-- ✅ compute row_number HERE (legal)
+expanded_numbered AS (
+    SELECT
+        e.*,
+        row_number() OVER () AS rn
+    FROM expanded e
+),
+
+assigned AS (
+    SELECT
+        e.playlist_id,
+        u.id AS saved_by
+    FROM expanded_numbered e
+    JOIN user_count uc ON TRUE
+    JOIN shuffled_users u
+      ON u.rn = ((e.rn % uc.cnt) + 1)
+    WHERE u.id <> e.creator_user_id
+)
+
+INSERT INTO Saved_Playlists (playlist_id, saved_by)
+SELECT DISTINCT playlist_id, saved_by
+FROM assigned
+LIMIT 5000;
+
+
+select saved_by,count(*)
+from saved_playlists
+group by saved_by
+order by count(*)desc ;
+
+delete from saved_playlists;
+
+
+
+
+
+--- Do tuka
+WITH song_pool AS (
+    SELECT id
+    FROM Songs
+),
+
+song_count AS (
+    SELECT count(*) AS cnt FROM song_pool
+),
+
+playlist_sample AS (
+    SELECT id AS playlist_id
+    FROM Playlists
+),
+
+expanded AS (
+    SELECT
+        p.playlist_id,
+        (1 + floor(random() * 20))::int AS song_count,
+        floor(random() * 1000000)::int AS seed   -- one random seed per playlist
+    FROM playlist_sample p
+)
+
+INSERT INTO Playlist_Tracks (playlist_id, song_id)
+SELECT DISTINCT
+    e.playlist_id,
+    s.id
+FROM expanded e
+JOIN song_count sc ON TRUE
+JOIN song_pool s
+  ON s.id % sc.cnt < e.song_count
+WHERE s.id <> 0;
+
+
+select count(song_id)
+from playlist_tracks pt
+group by pt.playlist_id
