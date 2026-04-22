@@ -605,7 +605,7 @@ WITH non_artist_users AS (
          FROM playlist_sample p
      ),
 
--- ✅ compute row_number HERE (legal)
+-- compute row_number HERE (legal)
      expanded_numbered AS (
          SELECT
              e.*,
