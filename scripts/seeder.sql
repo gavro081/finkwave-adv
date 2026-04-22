@@ -383,62 +383,128 @@ FROM expanded
 WHERE (label_id IS NULL OR label_admin_id IS NOT NULL);
 
 
--- add each song that is linked to an album as a record into the album_tracks table
-WITH song_album_match AS (
-    SELECT
-        s.id AS song_id,
-        al.id AS album_id,
+select count(*) from (
+    select owner_artist_id,count(*) from albums
+    group by owner_artist_id
+);
 
-    ROW_NUMBER() OVER (
-        PARTITION BY s.id
-        ORDER BY random()
-    ) AS rn
 
-    FROM Songs s
-    JOIN Albums al 
-        ON al.owner_artist_id = s.owner_artist_id
-        AND 
-        (
-            (al.published_by_artist_id IS NOT NULL AND s.published_by_artist_id IS NOT NULL)
-            OR (al.published_by_label_admin_id IS NOT NULL AND s.published_by_label_admin_id IS NOT NULL)
-        )
-),
-chosen AS (
-    -- pick ONE album per song
-    SELECT song_id, album_id
-    FROM song_album_match
-    WHERE rn = 1
-), 
-album_limits AS (
+
+-- select count(f.follower_user_id)
+-- from albums a
+-- join follows f on a.owner_artist_id=f.followed_user_id
+-- group by a.owner_artist_id
+-- order by count(f.follower_user_id)desc ;
+
+
+
+-- WITH song_album_match AS (
+--     SELECT
+--         s.id AS song_id,
+--         al.id AS album_id,
+
+--         ROW_NUMBER() OVER (
+--             PARTITION BY s.id
+--             ORDER BY random()
+--             ) AS rn
+
+--     FROM Songs s
+--              JOIN Albums al
+--                   ON al.owner_artist_id = s.owner_artist_id
+--                       AND (
+--                          (al.published_by_artist_id IS NOT NULL AND s.published_by_artist_id IS NOT NULL)
+--                              OR (al.published_by_label_admin_id IS NOT NULL AND s.published_by_label_admin_id IS NOT NULL)
+--                          )
+-- ),
+--      chosen AS (
+--          -- pick ONE album per song
+--          SELECT song_id, album_id
+--          FROM song_album_match
+--          WHERE rn = 1
+--      ), album_limits AS (
+--     SELECT
+--         id AS album_id,
+--         (8 + floor(random() * 8))::int AS max_tracks
+--     FROM Albums
+-- ),
+--      ranked AS (
+--          SELECT
+--              c.*,
+--              ROW_NUMBER() OVER (
+--                  PARTITION BY c.album_id
+--                  ORDER BY random()
+--                  ) AS rn
+--          FROM chosen c
+--      ),
+--      limited AS (
+--          SELECT r.*
+--          FROM ranked r
+--                   JOIN album_limits l ON r.album_id = l.album_id
+--          WHERE r.rn <= l.max_tracks
+--      )
+-- INSERT INTO Album_Tracks (album_id, song_id, track_number)
+-- SELECT
+--     album_id,
+--     song_id,
+--     ROW_NUMBER() OVER (
+--         PARTITION BY album_id
+--         ORDER BY rn
+--         )
+-- FROM limited;
+
+
+
+WITH album_requirements AS (
+    -- how many tracks each album needs and get a sequence for the artist's albums
     SELECT
-    id AS album_id,
-    (8 + floor(random() * 8))::int AS max_tracks
+        id AS album_id,
+        owner_artist_id,
+        (5 + floor(random() * 12))::int AS needed,
+        ROW_NUMBER() OVER (PARTITION BY owner_artist_id ORDER BY id) as album_seq
     FROM Albums
 ),
-ranked AS (
+album_ranges AS (
+    -- create a start and end song index for each album
+    -- e.g. Album 1: 1-10, Album 2: 11-25, etc.
     SELECT
-        c.*,
-        ROW_NUMBER() OVER (
-            PARTITION BY c.album_id
-            ORDER BY random()
-        ) AS rn
-    FROM chosen c
+        *,
+        COALESCE(SUM(needed) OVER (PARTITION BY owner_artist_id ORDER BY album_seq ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) + 1 AS range_start,
+        SUM(needed) OVER (PARTITION BY owner_artist_id ORDER BY album_seq) AS range_end
+    FROM album_requirements
 ),
-limited AS (
-    SELECT r.*
-    FROM ranked r
-    JOIN album_limits l ON r.album_id = l.album_id
-    WHERE r.rn <= l.max_tracks
+artist_songs AS (
+    -- rank every song globally per artist
+    SELECT
+        id AS song_id,
+        owner_artist_id,
+        ROW_NUMBER() OVER (PARTITION BY owner_artist_id ORDER BY random()) as global_song_rank
+    FROM Songs
+),
+final_assignment AS (
+    -- match the song rank to the album range
+    -- this ensures a song with rank 5 ONLY fits in the album covering range 1-10
+    SELECT
+        r.album_id,
+        s.song_id,
+        (s.global_song_rank - r.range_start + 1) AS track_number,
+        r.needed
+    FROM album_ranges r
+    JOIN artist_songs s
+      ON s.owner_artist_id = r.owner_artist_id
+     AND s.global_song_rank BETWEEN r.range_start AND r.range_end
+),
+validation AS (
+    -- count how many tracks we actually found for each album
+    SELECT
+        *,
+        COUNT(*) OVER (PARTITION BY album_id) as actual_count
+    FROM final_assignment
 )
+
 INSERT INTO Album_Tracks (album_id, song_id, track_number)
-SELECT
-    album_id,
-    song_id,
-    ROW_NUMBER() OVER (
-        PARTITION BY album_id
-        ORDER BY rn
-    )
-FROM limited;
+SELECT album_id, song_id, track_number
+FROM validation
+WHERE actual_count >= 5;
 
 
 -- 10K playlists
@@ -476,6 +542,8 @@ playlist_sample AS (
     LIMIT 5000
 ),
 
+
+-- todo: check logic!
 expanded AS (
     SELECT
         p.playlist_id,
@@ -505,7 +573,6 @@ assigned AS (
                 ON u.rn = ((e.rn % uc.cnt) + 1)
     WHERE u.id <> e.creator_user_id
 )
-
 INSERT INTO Saved_Playlists (playlist_id, saved_by)
 SELECT DISTINCT playlist_id, saved_by
 FROM assigned
