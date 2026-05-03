@@ -1,54 +1,54 @@
-drop view user_follow_info;
-drop view user_activity_last_30_days;
-drop view song_average_grade;
+DROP VIEW user_follow_info;
+DROP VIEW user_activity_last_30_days;
+DROP VIEW song_average_grade;
 
 -- view #1 - for each user get followers and following
-create view user_follow_info as
+CREATE VIEW user_follow_info AS
 (
-    with user_followers as (select followed_user_id as user_id, count(followed_user_id) as followers
-                            from follows
-                            group by followed_user_id),
-         user_follows as (select follower_user_id as user_id, count(followed_user_id) as following
-                          from follows
-                          group by follower_user_id)
-    select user_id, username, followers, following
-    from user_follows
-             natural join user_followers
-             join users u on u.id = user_id
-    order by followers desc
+    WITH user_followers AS (SELECT followed_user_id AS user_id, COUNT(followed_user_id) AS followers
+                            FROM follows
+                            GROUP BY followed_user_id),
+         user_follows AS (SELECT follower_user_id AS user_id, COUNT(followed_user_id) AS following
+                          FROM follows
+                          GROUP BY follower_user_id)
+    SELECT user_id, username, followers, following
+    FROM user_follows
+             NATURAL JOIN user_followers
+             JOIN users u ON u.id = user_id
+    ORDER BY followers DESC
 );
 
--- view #2 - most active users - users with the most streams in the last 30 days
-create view user_activity_last_30_days as
+-- view #2 - most active users - users WITH the most streams in the last 30 days
+CREATE VIEW user_activity_last_30_days AS
 (
-    with streams_per_user as (select ss.user_id, count(ss.song_id) as stream_count
-                              from song_streams ss
-                              where ss.streamed_at between current_date - 30 and now()
-                              group by ss.user_id)
-    select u.username, spu.*
-    from users u
-             join streams_per_user spu on u.id = spu.user_id
-    order by stream_count desc
+    WITH streams_per_user AS (SELECT ss.user_id, COUNT(ss.song_id) AS stream_count
+                              FROM song_streams ss
+                              WHERE ss.streamed_at BETWEEN current_date - 30 and now()
+                              GROUP BY ss.user_id)
+    SELECT u.username, spu.*
+    FROM users u
+             JOIN streams_per_user spu ON u.id = spu.user_id
+    ORDER BY stream_count DESC
 );
 
--- view #3 - average review grade and number of reviews per song
-create view song_average_grade as
+-- view #3 - average reVIEW grade and number of reVIEWs per song
+CREATE VIEW song_average_grade AS
 (
-    with avg_grade as (select song_id,
-                              avg(r.grade)   as avg_grade,
-                              count(r.grade) as num_reviews
-                       from reviews r
-                       group by r.song_id)
-    select s.id       as song_id,
-           s.title    as song_title,
-           u.username as released_by,
-           u.id       as user_id,
+    WITH avg_grade AS (SELECT song_id,
+                              AVG(r.grade)   AS avg_grade,
+                              COUNT(r.grade) AS num_reVIEWs
+                       FROM reVIEWs r
+                       GROUP BY r.song_id)
+    SELECT s.id       AS song_id,
+           s.title    AS song_title,
+           u.username AS released_by,
+           u.id       AS user_id,
            ag.avg_grade,
-           ag.num_reviews
-    from songs s
-             join avg_grade ag on ag.song_id = s.id
-             join users u on u.id = s.owner_artist_id
-    order by avg_grade desc, num_reviews desc
+           ag.num_reVIEWs
+    FROM songs s
+             JOIN avg_grade ag ON ag.song_id = s.id
+             JOIN users u ON u.id = s.owner_artist_id
+    ORDER BY avg_grade DESC, num_reVIEWs DESC
 );
 
 
