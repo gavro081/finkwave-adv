@@ -50,3 +50,83 @@ create view song_average_grade as
              join users u on u.id = s.owner_artist_id
     order by avg_grade desc, num_reviews desc
 );
+
+
+-- view #4 - most popular artists in the last  30 days
+
+CREATE OR REPLACE VIEW most_popular_artists_last_30_days AS
+WITH streams_count AS (
+    SELECT ss.song_id, COUNT(*) AS cnt
+    FROM song_streams ss
+    WHERE ss.streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+    GROUP BY ss.song_id
+)
+SELECT
+    a.id AS artist_id,
+    a.display_name AS artist_display_name,
+    COALESCE(SUM(sc.cnt), 0) AS total_listens
+FROM artists a
+LEFT JOIN songs s ON s.owner_artist_id = a.id
+LEFT JOIN streams_count sc ON sc.song_id = s.id
+GROUP BY a.id
+ORDER BY total_listens DESC;
+
+
+
+-- view #5 - most popular songs in the last 30 days
+
+CREATE OR REPLACE VIEW most_popular_songs_last_30_days AS
+WITH stream_counts AS (
+    SELECT song_id, COUNT(*) AS total_streams
+    FROM song_streams
+    WHERE streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+    GROUP BY song_id
+)
+SELECT
+    s.id AS song_id,
+    s.title AS song_title,
+    a.display_name AS artist_display_name,
+    s.visibility AS song_visibility,
+    u.username AS label_admin_username,
+    l.name AS label_name,
+    sc.total_streams
+FROM stream_counts sc
+JOIN songs s ON s.id = sc.song_id
+JOIN artists a ON s.owner_artist_id = a.id
+LEFT JOIN label_admins la ON s.published_by_label_admin_id = la.id
+LEFT JOIN labels l ON l.id = la.label_id
+LEFT JOIN users u ON u.id = la.user_id
+ORDER BY sc.total_streams DESC;
+
+
+
+-- view #6 - label's artists information
+
+CREATE OR REPLACE VIEW label_artists_info AS
+WITH artist_followers AS (
+    SELECT a.id AS artist_id,
+           COUNT(f.followed_user_id) AS followers
+    FROM artists a
+    LEFT JOIN follows f ON f.followed_user_id = a.id
+    GROUP BY a.id
+),
+artist_songs AS (
+    SELECT a.id AS artist_id,
+           COUNT(s.id) AS song_count
+    FROM artists a
+    LEFT JOIN songs s ON s.owner_artist_id = a.id
+    GROUP BY a.id
+)
+SELECT
+    l.name AS label_name,
+    a.display_name AS artist_display_name,
+    asng.song_count AS songs,
+    af.followers AS followers
+FROM artist_labels al
+JOIN artists a ON al.artist_id = a.id
+JOIN artist_songs asng ON asng.artist_id = a.id
+JOIN artist_followers af ON af.artist_id = a.id
+JOIN labels l ON al.label_id = l.id;
+
+
+
