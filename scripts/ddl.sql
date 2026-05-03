@@ -273,10 +273,11 @@ CREATE TABLE Playback_Sessions (
 
 CREATE TABLE Song_Streams (
     id BIGSERIAL PRIMARY KEY,
-    -- site 3 se zemeni od Playback_Sessions, verojatno od trigger
+    -- site 4 se zemeni od Playback_Sessions, verojatno od trigger
     playback_session_id BIGINT NOT NULL,
     song_id BIGINT NOT NULL,
     streamed_at TIMESTAMP NOT NULL,
+    user_id BIGINT NOT NULL,
 
     FOREIGN KEY (playback_session_id) REFERENCES Playback_Sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (song_id) REFERENCES Songs(id)

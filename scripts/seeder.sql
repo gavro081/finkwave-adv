@@ -596,12 +596,14 @@ FROM generated;
 INSERT INTO Song_Streams (
     playback_session_id,
     song_id,
-    streamed_at
+    streamed_at,
+    user_id
 )
 SELECT
     ps.id,
     ps.song_id,
-    ps.started_at
+    ps.started_at,
+    ps.user_id
 FROM Playback_Sessions ps
 WHERE ps.listened_ms >= 30000;
 
