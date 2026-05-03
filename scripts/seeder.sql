@@ -510,9 +510,9 @@ WHERE actual_count >= 5;
 -- 10K playlists
 INSERT INTO Playlists (playlist_name, visibility, creator_user_id)
 SELECT
-    'Playlist_' || (floor(random() * 899999)::int + 100001) || '_' || gs,
+    'Playlist_' || (floor(random() * 899624)::int + 100376) || '_' || gs,
     CASE WHEN random() < 0.7 THEN 'PUBLIC' ELSE 'PRIVATE' END,
-    floor(random() * 899999)::int + 100001
+    floor(random() * 899624)::int + 100376
 FROM generate_series(1, 10000) gs;
 
 -- insert 5K records into Saved_Playlists
@@ -596,7 +596,7 @@ WITH song_count AS (
 )
 INSERT INTO Reviews (user_id, song_id, grade)
 SELECT
-    (100001 + floor(random() * (999999 - 100001 + 1)))::bigint AS user_id,
+    (100376 + floor(random() * (999999 - 100376 + 1)))::bigint AS user_id,
     (1 + floor(random() * sc.cnt))::bigint AS song_id,
     (1 + floor(random() * 5))::int AS grade
 FROM generate_series(1, 100000),
@@ -619,7 +619,7 @@ generated AS (
         listened_ms AS last_position_ms
     FROM (
         SELECT
-            (100001 + floor(random() * (999999 - 100001 + 1)))::bigint AS user_id,
+            (100376 + floor(random() * (999999 - 100376 + 1)))::bigint AS user_id,
 
             CASE
                 WHEN random() < 0.6 THEN
