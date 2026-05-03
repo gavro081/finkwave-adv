@@ -291,6 +291,13 @@ expanded AS (
         END
 ) AS song_num
     FROM artist_full af
+),
+numbered AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY artist_id, song_num) AS rn,
+        COUNT(*) OVER () AS total_cnt
+    FROM expanded
 )
 INSERT INTO Songs (
     title,
@@ -301,24 +308,23 @@ INSERT INTO Songs (
     genre
 )
 SELECT
-    -- random title
     'Song_' || artist_id || '_' || song_num,
-    -- random visibility
-    (ARRAY['PUBLIC','PRIVATE'])[floor(random()*2)+1],
-    -- owner
+    -- first 25% of songs are private, the rest public
+    CASE
+        WHEN rn <= total_cnt * 0.25 THEN 'PRIVATE'
+        ELSE 'PUBLIC'
+    END,
     artist_id,
-    -- published_by_artist_id (only if no label)
     CASE
         WHEN label_id IS NULL THEN artist_id
         ELSE NULL
         END,
-    -- published_by_label_admin_id (only if label exists)
     CASE
         WHEN label_id IS NOT NULL THEN label_admin_id
         ELSE NULL
         END,
     NULL
-FROM expanded;
+FROM numbered;
 
 -- assign songs to albums by giving more albums to more popular artists
 WITH artist_followers AS (
@@ -381,77 +387,6 @@ SELECT
 
 FROM expanded
 WHERE (label_id IS NULL OR label_admin_id IS NOT NULL);
-
-
-select count(*) from (
-    select owner_artist_id,count(*) from albums
-    group by owner_artist_id
-);
-
-
-
--- select count(f.follower_user_id)
--- from albums a
--- join follows f on a.owner_artist_id=f.followed_user_id
--- group by a.owner_artist_id
--- order by count(f.follower_user_id)desc ;
-
-
-
--- WITH song_album_match AS (
---     SELECT
---         s.id AS song_id,
---         al.id AS album_id,
-
---         ROW_NUMBER() OVER (
---             PARTITION BY s.id
---             ORDER BY random()
---             ) AS rn
-
---     FROM Songs s
---              JOIN Albums al
---                   ON al.owner_artist_id = s.owner_artist_id
---                       AND (
---                          (al.published_by_artist_id IS NOT NULL AND s.published_by_artist_id IS NOT NULL)
---                              OR (al.published_by_label_admin_id IS NOT NULL AND s.published_by_label_admin_id IS NOT NULL)
---                          )
--- ),
---      chosen AS (
---          -- pick ONE album per song
---          SELECT song_id, album_id
---          FROM song_album_match
---          WHERE rn = 1
---      ), album_limits AS (
---     SELECT
---         id AS album_id,
---         (8 + floor(random() * 8))::int AS max_tracks
---     FROM Albums
--- ),
---      ranked AS (
---          SELECT
---              c.*,
---              ROW_NUMBER() OVER (
---                  PARTITION BY c.album_id
---                  ORDER BY random()
---                  ) AS rn
---          FROM chosen c
---      ),
---      limited AS (
---          SELECT r.*
---          FROM ranked r
---                   JOIN album_limits l ON r.album_id = l.album_id
---          WHERE r.rn <= l.max_tracks
---      )
--- INSERT INTO Album_Tracks (album_id, song_id, track_number)
--- SELECT
---     album_id,
---     song_id,
---     ROW_NUMBER() OVER (
---         PARTITION BY album_id
---         ORDER BY rn
---         )
--- FROM limited;
-
 
 
 WITH album_requirements AS (
@@ -606,17 +541,23 @@ FROM generate_series(1, 100000),
 -- 1.5M playback sessions
 -- top ~5% of songs are more favored to simulate "more popular" songs, a medium tier gets moderate attention while the rest receive very few plays
 -- timestamps are randomly distributed across the last 6 months and durations are 20-50s
+-- only public songs are eligible for playback sessions
 
-WITH song_count AS (
-    SELECT COUNT(*) AS cnt FROM Songs
+WITH public_songs AS (
+    SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+    FROM Songs
+    WHERE visibility = 'PUBLIC'
+),
+public_song_count AS (
+    SELECT COUNT(*) AS cnt FROM public_songs
 ),
 generated AS (
     SELECT
-        user_id,
-        song_id,
-        started_at,
-        listened_ms,
-        listened_ms AS last_position_ms
+        t.user_id,
+        ps.id AS song_id,
+        t.started_at,
+        t.listened_ms,
+        t.listened_ms AS last_position_ms
     FROM (
         SELECT
             (100376 + floor(random() * (999999 - 100376 + 1)))::bigint AS user_id,
@@ -628,15 +569,16 @@ generated AS (
                     floor(random() * (cnt * 0.15))::bigint + (cnt * 0.05)::bigint + 1
                 ELSE
                     floor(random() * (cnt * 0.80))::bigint + (cnt * 0.20)::bigint + 1
-                END AS song_id,
+                END AS song_rn,
 
             NOW() - (random() * INTERVAL '6 months') AS started_at,
 
             -- computed once per row
             (20000 + floor(random() * 31000))::int AS listened_ms
 
-        FROM generate_series(1, 1500000), song_count
+        FROM generate_series(1, 1500000), public_song_count
     ) t
+    JOIN public_songs ps ON ps.rn = t.song_rn
 )
 INSERT INTO Playback_Sessions (
     user_id,
