@@ -22,7 +22,7 @@ create or replace view user_follow_info as
 )
 
 -- view #2 - most active users - users WITH the most streams in the last 30 days
-CREATE VIEW user_activity_last_30_days AS
+CREATE OR REPLACE VIEW user_activity_last_30_days AS
 (
     WITH streams_per_user AS (SELECT ss.user_id, COUNT(ss.song_id) AS stream_count
                               FROM song_streams ss
@@ -35,7 +35,7 @@ CREATE VIEW user_activity_last_30_days AS
 );
 
 -- view #3 - average reVIEW grade and number of reVIEWs per song
-CREATE VIEW song_average_grade AS
+CREATE OR REPLACE VIEW song_average_grade AS
 (
     WITH avg_grade AS (SELECT song_id,
                               AVG(r.grade)   AS avg_grade,

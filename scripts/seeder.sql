@@ -525,7 +525,8 @@ CROSS JOIN LATERAL (
     LIMIT (5 + floor(random() * 16))
 ) s;
 
--- 100K reviews
+-- 1M reviews
+-- run 10x for 10M reviews
 WITH song_count AS (
     SELECT COUNT(*) AS cnt FROM Songs
 )
@@ -534,14 +535,16 @@ SELECT
     (100376 + floor(random() * (999999 - 100376 + 1)))::bigint AS user_id,
     (1 + floor(random() * sc.cnt))::bigint AS song_id,
     (1 + floor(random() * 5))::int AS grade
-FROM generate_series(1, 100000),
+FROM generate_series(1, 1000000),
     song_count sc;
 
 
--- 1.5M playback sessions
+-- 1M playback sessions
 -- top ~5% of songs are more favored to simulate "more popular" songs, a medium tier gets moderate attention while the rest receive very few plays
 -- timestamps are randomly distributed across the last 6 months and durations are 20-50s
 -- only public songs are eligible for playback sessions
+
+-- run 10x for 10M
 
 WITH public_songs AS (
     SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
@@ -576,7 +579,7 @@ generated AS (
             -- computed once per row
             (20000 + floor(random() * 31000))::int AS listened_ms
 
-        FROM generate_series(1, 1500000), public_song_count
+        FROM generate_series(1, 1000000), public_song_count
     ) t
     JOIN public_songs ps ON ps.rn = t.song_rn
 )
