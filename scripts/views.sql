@@ -3,20 +3,23 @@ DROP VIEW user_activity_last_30_days;
 DROP VIEW song_average_grade;
 
 -- view #1 - for each user get followers and following
-CREATE VIEW user_follow_info AS
+create or replace view user_follow_info as
 (
-    WITH user_followers AS (SELECT followed_user_id AS user_id, COUNT(followed_user_id) AS followers
-                            FROM follows
-                            GROUP BY followed_user_id),
-         user_follows AS (SELECT follower_user_id AS user_id, COUNT(followed_user_id) AS following
-                          FROM follows
-                          GROUP BY follower_user_id)
-    SELECT user_id, username, followers, following
-    FROM user_follows
-             NATURAL JOIN user_followers
-             JOIN users u ON u.id = user_id
-    ORDER BY followers DESC
-);
+    with user_followers as (select followed_user_id as user_id, count(followed_user_id) as followers
+                        from follows
+                        group by followed_user_id),
+     user_follows as (select follower_user_id as user_id, count(followed_user_id) as following
+                      from follows
+                      group by follower_user_id)
+    select uf1.user_id,
+        username,
+        coalesce(followers, 0) as followers,
+        coalesce(following, 0) as following
+    from user_follows uf1
+            left join user_followers uf2 on uf1.user_id = uf2.user_id
+            left join users u on u.id = uf1.user_id
+    order by followers desc;
+)
 
 -- view #2 - most active users - users WITH the most streams in the last 30 days
 CREATE VIEW user_activity_last_30_days AS
@@ -52,7 +55,7 @@ CREATE VIEW song_average_grade AS
 );
 
 
--- view #4 - most popular artists in the last  30 days
+-- view #4 - most popular artists in the last 30 days
 
 CREATE OR REPLACE VIEW most_popular_artists_last_30_days AS
 WITH streams_count AS (
