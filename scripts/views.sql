@@ -34,46 +34,53 @@ CREATE OR REPLACE VIEW user_activity_last_30_days AS
     ORDER BY stream_count DESC
 );
 
--- view #3 - average reVIEW grade and number of reVIEWs per song
+-- view #3 - average review grade and number of review per song
 CREATE OR REPLACE VIEW song_average_grade AS
 (
     WITH avg_grade AS (SELECT song_id,
                               AVG(r.grade)   AS avg_grade,
-                              COUNT(r.grade) AS num_reVIEWs
-                       FROM reVIEWs r
+                              COUNT(r.grade) AS num_reviews
+                       FROM reviews r
                        GROUP BY r.song_id)
     SELECT s.id       AS song_id,
            s.title    AS song_title,
            u.username AS released_by,
            u.id       AS user_id,
            ag.avg_grade,
-           ag.num_reVIEWs
+           ag.num_reviews
     FROM songs s
              JOIN avg_grade ag ON ag.song_id = s.id
              JOIN users u ON u.id = s.owner_artist_id
-    ORDER BY avg_grade DESC, num_reVIEWs DESC
+    ORDER BY avg_grade DESC, num_reviews DESC
 );
 
 
--- view #4 - most popular artists in the last 30 days
+-- view #4 - streams per artist in the last 30 days
 
-CREATE OR REPLACE VIEW most_popular_artists_last_30_days AS
+CREATE OR REPLACE VIEW artist_popularity_last_30_days AS
 WITH streams_count AS (
     SELECT ss.song_id, COUNT(*) AS cnt
     FROM song_streams ss
     WHERE ss.streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
     GROUP BY ss.song_id
+),
+artist_listens AS (
+    SELECT
+        a.id AS artist_id,
+        a.display_name AS artist_display_name,
+        COALESCE(SUM(sc.cnt), 0) AS total_listens
+    FROM artists a
+    LEFT JOIN songs s ON s.owner_artist_id = a.id
+    LEFT JOIN streams_count sc ON sc.song_id = s.id
+    GROUP BY a.id, a.display_name
 )
 SELECT
-    a.id AS artist_id,
-    a.display_name AS artist_display_name,
-    COALESCE(SUM(sc.cnt), 0) AS total_listens
-FROM artists a
-LEFT JOIN songs s ON s.owner_artist_id = a.id
-LEFT JOIN streams_count sc ON sc.song_id = s.id
-GROUP BY a.id
+    ROW_NUMBER() OVER (ORDER BY total_listens DESC) AS rank,
+    artist_id,
+    artist_display_name,
+    total_listens
+FROM artist_listens
 ORDER BY total_listens DESC;
-
 
 
 -- view #5 - most popular songs in the last 30 days
@@ -106,30 +113,17 @@ ORDER BY sc.total_streams DESC;
 -- view #6 - label's artists information
 
 CREATE OR REPLACE VIEW label_artists_info AS
-WITH artist_followers AS (
-    SELECT a.id AS artist_id,
-           COUNT(f.followed_user_id) AS followers
-    FROM artists a
-    LEFT JOIN follows f ON f.followed_user_id = a.id
-    GROUP BY a.id
-),
-artist_songs AS (
-    SELECT a.id AS artist_id,
-           COUNT(s.id) AS song_count
-    FROM artists a
-    LEFT JOIN songs s ON s.owner_artist_id = a.id
-    GROUP BY a.id
-)
 SELECT
     l.name AS label_name,
     a.display_name AS artist_display_name,
-    asng.song_count AS songs,
-    af.followers AS followers
-FROM artist_labels al
-JOIN artists a ON al.artist_id = a.id
-JOIN artist_songs asng ON asng.artist_id = a.id
-JOIN artist_followers af ON af.artist_id = a.id
-JOIN labels l ON al.label_id = l.id;
-
+    COUNT(DISTINCT s.id) AS songs,
+    COUNT(DISTINCT f.follower_user_id) AS followers
+FROM labels l
+JOIN artist_labels al ON al.label_id = l.id
+JOIN artists a ON a.id = al.artist_id
+LEFT JOIN songs s ON s.owner_artist_id = a.id
+LEFT JOIN follows f ON f.followed_user_id = a.user_id
+GROUP BY l.name, a.id, a.display_name
+ORDER BY l.name, a.display_name;
 
 
