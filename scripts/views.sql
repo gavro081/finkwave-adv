@@ -1,27 +1,25 @@
-DROP VIEW user_follow_info;
-DROP VIEW user_activity_last_30_days;
-DROP VIEW song_average_grade;
-
 -- view #1 - for each user get followers and following
-create or replace view user_follow_info as
-(
-    with user_followers as (select followed_user_id as user_id, count(followed_user_id) as followers
-                        from follows
-                        group by followed_user_id),
-     user_follows as (select follower_user_id as user_id, count(followed_user_id) as following
-                      from follows
-                      group by follower_user_id)
-    select uf1.user_id,
-        username,
-        coalesce(followers, 0) as followers,
-        coalesce(following, 0) as following
-    from user_follows uf1
-            left join user_followers uf2 on uf1.user_id = uf2.user_id
-            left join users u on u.id = uf1.user_id
-    order by followers desc;
-)
 
--- view #2 - most active users - users WITH the most streams in the last 30 days
+CREATE OR REPLACE VIEW user_follow_info AS
+(
+    WITH user_followers AS (SELECT followed_user_id AS user_id, count(followed_user_id) AS followers
+                        FROM follows
+                        GROUP BY followed_user_id),
+     user_follows AS (SELECT follower_user_id AS user_id, count(followed_user_id) AS following
+                      FROM follows
+                      GROUP BY follower_user_id)
+    SELECT uf1.user_id,
+        username,
+        coalesce(followers, 0) AS followers,
+        coalesce(following, 0) AS following
+    FROM user_follows uf1
+            LEFT JOIN user_followers uf2 ON uf1.user_id = uf2.user_id
+            LEFT JOIN users u ON u.id = uf1.user_id
+    ORDER BY followers DESC
+);
+
+-- view #2 - most active users - users with the most streams in the last 30 days
+
 CREATE OR REPLACE VIEW user_activity_last_30_days AS
 (
     WITH streams_per_user AS (SELECT ss.user_id, COUNT(ss.song_id) AS stream_count
@@ -35,19 +33,20 @@ CREATE OR REPLACE VIEW user_activity_last_30_days AS
 );
 
 -- view #3 - average review grade and number of review per song
+
 CREATE OR REPLACE VIEW song_average_grade AS
 (
     WITH avg_grade AS (SELECT song_id,
                               AVG(r.grade)   AS avg_grade,
-                              COUNT(r.grade) AS num_reviews
-                       FROM reviews r
+                              COUNT(r.grade) AS num_reVIEWs
+                       FROM reVIEWs r
                        GROUP BY r.song_id)
     SELECT s.id       AS song_id,
            s.title    AS song_title,
            u.username AS released_by,
            u.id       AS user_id,
            ag.avg_grade,
-           ag.num_reviews
+           ag.num_reVIEWs
     FROM songs s
              JOIN avg_grade ag ON ag.song_id = s.id
              JOIN users u ON u.id = s.owner_artist_id
