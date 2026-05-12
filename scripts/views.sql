@@ -76,8 +76,7 @@ SELECT
     artist_id,
     artist_display_name,
     total_listens
-FROM artist_listens
-ORDER BY total_listens DESC;
+FROM artist_listens;
 
 
 -- view #5 - most popular songs in the last 30 days
@@ -102,8 +101,8 @@ JOIN songs s ON s.id = sc.song_id
 JOIN artists a ON s.owner_artist_id = a.id
 LEFT JOIN label_admins la ON s.published_by_label_admin_id = la.id
 LEFT JOIN labels l ON l.id = la.label_id
-LEFT JOIN users u ON u.id = la.user_id
-ORDER BY sc.total_streams DESC;
+LEFT JOIN users u ON u.id = la.user_id;
+
 
 
 
@@ -121,6 +120,166 @@ JOIN artists a ON a.id = al.artist_id
 LEFT JOIN songs s ON s.owner_artist_id = a.id
 LEFT JOIN follows f ON f.followed_user_id = a.user_id
 GROUP BY l.name, a.id, a.display_name
-ORDER BY l.name, a.display_name;
+ORDER BY l.name;
 
 
+-- view #7 - song details
+
+CREATE OR REPLACE VIEW songs_details AS
+WITH stream_counts AS (
+    SELECT
+        song_id,
+        COUNT(*) AS streams
+    FROM song_streams
+    GROUP BY song_id
+),
+playlist_counts AS (
+    SELECT
+        song_id,
+        COUNT(*) AS saved_in_playlists
+    FROM playlist_tracks
+    GROUP BY song_id
+)
+SELECT
+    s.title AS title,
+    a.display_name AS artist_name,
+    COALESCE(l.name, 'SOLO') AS label_name,
+    COALESCE(sc.streams, 0) AS streams,
+    COALESCE(alb.title, 'SINGLE') AS album_title,
+    COALESCE(pc.saved_in_playlists, 0) AS saved_in_playlists,
+    sag.num_reviews,
+    sag.avg_grade
+FROM songs s
+LEFT JOIN artists a ON a.id = s.owner_artist_id
+LEFT JOIN artist_labels al ON al.artist_id = a.id
+LEFT JOIN labels l ON l.id = al.label_id
+LEFT JOIN album_tracks at ON at.song_id = s.id
+LEFT JOIN albums alb ON alb.id = at.album_id
+LEFT JOIN stream_counts sc ON sc.song_id = s.id
+LEFT JOIN playlist_counts pc ON pc.song_id = s.id
+LEFT JOIN song_average_grade_mv sag ON sag.song_id = s.id;
+
+
+
+
+
+-- view #8 - streams history
+
+CREATE OR REPLACE VIEW streams_history AS
+SELECT
+    u.id AS user_id,
+    u.username,
+    s.id AS song_id,
+    s.title,
+    ss.streamed_at,
+    ps.listened_ms
+FROM users u
+JOIN song_streams ss ON ss.user_id = u.id
+JOIN songs s ON s.id = ss.song_id
+JOIN playback_sessions ps ON ps.id = ss.playback_session_id;
+
+
+
+
+
+-- MATERIALIZED VIEWS FOR OPTIMIZATION
+
+DROP VIEW artist_popularity_last_30_days;
+DROP VIEW most_popular_songs_last_30_days;
+
+
+
+-- view #4
+
+CREATE MATERIALIZED VIEW artist_popularity_last_30_days_mv AS
+WITH streams_count AS (
+    SELECT ss.song_id, COUNT(*) AS cnt
+    FROM song_streams ss
+    WHERE ss.streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+    GROUP BY ss.song_id
+),
+artist_listens AS (
+    SELECT
+        a.id AS artist_id,
+        a.display_name AS artist_display_name,
+        COALESCE(SUM(sc.cnt), 0) AS total_listens
+    FROM artists a
+    LEFT JOIN songs s ON s.owner_artist_id = a.id
+    LEFT JOIN streams_count sc ON sc.song_id = s.id
+    GROUP BY a.id, a.display_name
+)
+SELECT
+    ROW_NUMBER() OVER (ORDER BY total_listens DESC) AS rank,
+    artist_id,
+    artist_display_name,
+    total_listens
+FROM artist_listens;
+
+
+
+-- view #5
+
+CREATE MATERIALIZED VIEW most_popular_songs_last_30_days_mv AS
+WITH stream_counts AS (
+    SELECT
+        song_id,
+        COUNT(*) AS total_streams
+    FROM song_streams
+    WHERE streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+    GROUP BY song_id
+)
+SELECT
+    ROW_NUMBER() OVER (ORDER BY sc.total_streams DESC) AS rank,
+    s.id AS song_id,
+    s.title AS song_title,
+    a.display_name AS artist_display_name,
+    s.visibility AS song_visibility,
+    u.username AS label_admin_username,
+    l.name AS label_name,
+    sc.total_streams
+FROM stream_counts sc
+JOIN songs s ON s.id = sc.song_id
+JOIN artists a ON s.owner_artist_id = a.id
+LEFT JOIN label_admins la ON s.published_by_label_admin_id = la.id
+LEFT JOIN labels l ON l.id = la.label_id
+LEFT JOIN users u ON u.id = la.user_id;
+
+
+
+-- view #7
+
+CREATE MATERIALIZED VIEW song_stream_counts_mv AS
+SELECT
+    song_id,
+    COUNT(*) AS streams
+FROM song_streams
+GROUP BY song_id;
+
+
+CREATE MATERIALIZED VIEW song_playlist_counts_mv AS
+SELECT
+    song_id,
+    COUNT(*) AS saved_in_playlists
+FROM playlist_tracks
+GROUP BY song_id;
+
+
+CREATE OR REPLACE VIEW songs_details_mvs AS
+SELECT
+    s.title AS title,
+    a.display_name AS artist_name,
+    COALESCE(l.name, 'SOLO') AS label_name,
+    COALESCE(sc.streams, 0) AS streams,
+    COALESCE(alb.title, 'SINGLE') AS album_title,
+    COALESCE(pc.saved_in_playlists, 0) AS saved_in_playlists,
+    sag.num_reviews,
+    ROUND(sag.avg_grade, 2) AS avg_grade
+FROM songs s
+LEFT JOIN artists a ON a.id = s.owner_artist_id
+LEFT JOIN artist_labels al ON al.artist_id = a.id
+LEFT JOIN labels l ON l.id = al.label_id
+LEFT JOIN album_tracks at ON at.song_id = s.id
+LEFT JOIN albums alb ON alb.id = at.album_id
+LEFT JOIN song_stream_counts_mv sc ON sc.song_id = s.id
+LEFT JOIN song_playlist_counts_mv pc ON pc.song_id = s.id
+LEFT JOIN song_average_grade_mv sag ON sag.song_id = s.id;
