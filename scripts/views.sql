@@ -186,7 +186,7 @@ JOIN playback_sessions ps ON ps.id = ss.playback_session_id;
 
 DROP VIEW artist_popularity_last_30_days;
 DROP VIEW most_popular_songs_last_30_days;
-
+DROP VIEW songs_details;
 
 
 -- view #4
