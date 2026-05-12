@@ -34,7 +34,7 @@ CREATE OR REPLACE VIEW user_activity_last_30_days AS
 
 -- view #3 - average review grade and number of review per song
 
-DROP MATERIALIZED VIEW IF EXISTS song_average_grade_mv;
+DROP MATERIALIZED VIEW IF EXISTS song_average_grade_mv CASCADE; 
 
 CREATE MATERIALIZED VIEW song_average_grade_mv AS
 SELECT s.id       AS song_id,
