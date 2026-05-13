@@ -34,22 +34,24 @@ CREATE OR REPLACE VIEW user_activity_last_30_days AS
 
 -- view #3 - average review grade and number of review per song
 
-DROP MATERIALIZED VIEW IF EXISTS song_average_grade_mv CASCADE; 
-
-CREATE MATERIALIZED VIEW song_average_grade_mv AS
-SELECT s.id       AS song_id,
-       s.title    AS song_title,
-       u.username AS released_by,
-       u.id       AS user_id,
-       ag.avg_grade,
-       ag.num_reviews
-FROM (SELECT song_id,
-             AVG(grade)   AS avg_grade,
-             COUNT(grade) AS num_reviews
-      FROM reviews
-      GROUP BY song_id) ag
-JOIN songs s ON s.id = ag.song_id
-JOIN users u ON u.id = s.owner_artist_id;
+CREATE OR REPLACE VIEW song_average_grade AS
+(
+    WITH avg_grade AS (SELECT song_id,
+                              AVG(r.grade)   AS avg_grade,
+                              COUNT(r.grade) AS num_reVIEWs
+                       FROM reVIEWs r
+                       GROUP BY r.song_id)
+    SELECT s.id       AS song_id,
+           s.title    AS song_title,
+           u.username AS released_by,
+           u.id       AS user_id,
+           ag.avg_grade,
+           ag.num_reVIEWs
+    FROM songs s
+             JOIN avg_grade ag ON ag.song_id = s.id
+             JOIN users u ON u.id = s.owner_artist_id
+    ORDER BY avg_grade DESC, num_reviews DESC
+);
 
 
 -- view #4 - streams per artist in the last 30 days
@@ -102,8 +104,6 @@ JOIN artists a ON s.owner_artist_id = a.id
 LEFT JOIN label_admins la ON s.published_by_label_admin_id = la.id
 LEFT JOIN labels l ON l.id = la.label_id
 LEFT JOIN users u ON u.id = la.user_id;
-
-
 
 
 -- view #6 - label's artists information
@@ -187,7 +187,26 @@ JOIN playback_sessions ps ON ps.id = ss.playback_session_id;
 DROP VIEW artist_popularity_last_30_days;
 DROP VIEW most_popular_songs_last_30_days;
 DROP VIEW songs_details;
+DROP VIEW song_average_grade_mv;
 
+-- view #3
+
+DROP MATERIALIZED VIEW IF EXISTS song_average_grade_mv CASCADE; 
+
+CREATE MATERIALIZED VIEW song_average_grade_mv AS
+SELECT s.id       AS song_id,
+       s.title    AS song_title,
+       u.username AS released_by,
+       u.id       AS user_id,
+       ag.avg_grade,
+       ag.num_reviews
+FROM (SELECT song_id,
+             AVG(grade)   AS avg_grade,
+             COUNT(grade) AS num_reviews
+      FROM reviews
+      GROUP BY song_id) ag
+JOIN songs s ON s.id = ag.song_id
+JOIN users u ON u.id = s.owner_artist_id;
 
 -- view #4
 
