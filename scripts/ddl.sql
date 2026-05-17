@@ -142,12 +142,13 @@ CREATE TABLE Artist_Labels (
     id BIGSERIAL PRIMARY KEY,
     artist_id BIGINT NOT NULL,
     label_id BIGINT NOT NULL,
-    active BOOLEAN NOT NULL,
-    start_date DATE NOT NULL,
+    active BOOLEAN NULL,
+    start_date DATE NULL,
     end_date DATE NULL,
 
     FOREIGN KEY (artist_id) REFERENCES Artists(id),
     FOREIGN KEY (label_id) REFERENCES Labels(id)
+
 );
 
 CREATE TABLE Playlists (

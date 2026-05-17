@@ -176,3 +176,202 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 
+
+
+-- Тригер за проверка дали артистот и админот се дел од истата издавачка куќа при
+-- објавување на песна/албум
+
+create or replace function check_same_label()
+returns trigger
+language plpgsql
+as $$
+begin
+    if NEW.published_by_label_admin_id is not null then
+
+        if not exists (
+            select 1
+            from label_admins la
+            join artist_labels al on al.label_id = la.label_id
+            where la.id = NEW.published_by_label_admin_id
+              and al.artist_id = NEW.owner_artist_id
+              and al.active = true
+        ) then
+            raise exception 'Admin and artist do not belong to the same label';
+        end if;
+
+    end if;
+
+    return NEW;
+end;
+$$;
+
+
+drop trigger if exists check_same_admin_artist_label on songs;
+drop trigger if exists check_same_admin_artist_label on albums;
+
+create or replace trigger check_same_admin_artist_label
+    BEFORE insert or update on songs
+    for each row
+    execute function check_same_label();
+
+
+create or replace trigger check_same_admin_artist_label
+    BEFORE insert or update on albums
+    for each row
+    execute function check_same_label();
+
+
+
+
+-- Тригер за автоматско ажурирање на припадноста на артистот кон издавачка куќа при негово префрлање во нова издавачка куќа
+
+create or replace function handle_new_artist_in_label()
+returns trigger
+language plpgsql
+as $$
+begin
+    update artist_labels
+    set end_date = now(),
+        active = false
+    where artist_id = NEW.artist_id
+      and active = true;
+
+    NEW.active := true;
+    NEW.start_date := now();
+
+    return NEW;
+end;
+$$;
+
+drop trigger if exists handle_new_artist_in_label on artist_labels;
+
+create trigger handle_new_artist_in_label
+before insert on artist_labels
+for each row
+execute function handle_new_artist_in_label();
+
+
+
+
+-- Процедура за објавување на албум со песни
+
+
+create or replace procedure upload_album_with_songs(
+    p_album_title varchar,
+    p_album_visibility varchar,
+    p_owner_artist_id bigint,
+    p_published_by_artist_id bigint,
+    p_published_by_label_admin_id bigint,
+    p_songs jsonb,
+    inout p_album_id bigint default null,
+    inout p_created_song_ids bigint[] default '{}'
+)
+language plpgsql
+as $$
+declare
+    v_song jsonb;
+    v_song_id bigint;
+    v_track_number int := 1;
+begin
+    -- procedure-specific validation
+    if jsonb_typeof(p_songs) <> 'array' then
+        raise exception 'p_songs must be a JSON array';
+    end if;
+
+    if jsonb_array_length(p_songs) = 0 then
+        raise exception 'Album must contain at least one song';
+    end if;
+
+    -- insert album
+    -- your album trigger/check constraints will validate publisher rules
+    insert into albums (
+        title,
+        visibility,
+        owner_artist_id,
+        published_by_artist_id,
+        published_by_label_admin_id
+    )
+    values (
+        p_album_title,
+        p_album_visibility,
+        p_owner_artist_id,
+        p_published_by_artist_id,
+        p_published_by_label_admin_id
+    )
+    returning id into p_album_id;
+
+    -- insert songs and connect them to album_tracks
+    for v_song in
+        select value
+        from jsonb_array_elements(p_songs)
+    loop
+        if coalesce(v_song ->> 'title', '') = '' then
+            raise exception 'Every song must have a title';
+        end if;
+
+        insert into songs (
+            title,
+            visibility,
+            owner_artist_id,
+            published_by_artist_id,
+            published_by_label_admin_id,
+            genre
+        )
+        values (
+            v_song ->> 'title',
+            p_album_visibility,
+            p_owner_artist_id,
+            p_published_by_artist_id,
+            p_published_by_label_admin_id,
+            v_song ->> 'genre'
+        )
+        returning id into v_song_id;
+
+        insert into album_tracks (
+            album_id,
+            song_id,
+            track_number
+        )
+        values (
+            p_album_id,
+            v_song_id,
+            v_track_number
+        );
+
+        p_created_song_ids := array_append(p_created_song_ids, v_song_id);
+        v_track_number := v_track_number + 1;
+    end loop;
+end;
+$$;
+
+
+
+
+-- Процедура за ажурирање на сите материјализирани погледи
+
+create or replace procedure refresh_all_materialized_views()
+language plpgsql
+as $$
+declare
+    v_mv record;
+begin
+    for v_mv in
+        select schemaname,
+               matviewname
+        from pg_matviews
+        where schemaname = 'public'
+    loop
+        raise notice 'Refreshing %.%',
+            v_mv.schemaname,
+            v_mv.matviewname;
+
+        execute format(
+            'refresh materialized view %I.%I',
+            v_mv.schemaname,
+            v_mv.matviewname
+        );
+    end loop;
+end;
+$$;
+
+
