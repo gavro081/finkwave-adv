@@ -267,13 +267,11 @@ CREATE TABLE Playback_Sessions (
 
     FOREIGN KEY (user_id) REFERENCES Users(id),
     FOREIGN KEY (song_id) REFERENCES Songs(id)
-    -- todo: triger sto ke zapisuva vo song streams koga listened_ms ke nadmine odreden threshold
 );
 
 
 CREATE TABLE Song_Streams (
     id BIGSERIAL PRIMARY KEY,
-    -- site 4 se zemeni od Playback_Sessions, verojatno od trigger
     playback_session_id BIGINT NOT NULL,
     song_id BIGINT NOT NULL,
     streamed_at TIMESTAMP NOT NULL,
