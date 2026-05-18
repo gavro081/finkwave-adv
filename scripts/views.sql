@@ -238,28 +238,27 @@ FROM artist_listens;
 
 -- view #5
 
-create or replace view most_popular_songs_last_30_days_mv as
-with stream_counts as (
-    select
+CREATE MATERIALIZED VIEW most_popular_songs_last_30_days_mv AS
+WITH stream_counts AS (
+    SELECT
         song_id,
-        count(*) as total_streams
-    from song_streams
-    where streamed_at >= current_timestamp - interval '30 days'
-    group by song_id
+        COUNT(*) AS total_streams
+    FROM song_streams
+    WHERE streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+    GROUP BY song_id
 )
-select
-    row_number() over (order by sc.total_streams desc) as rank,
-    s.id as song_id,
-    s.title as song_title,
-    a.display_name as artist_display_name,
-    s.visibility as song_visibility,
-    l.name as label_name,
+SELECT
+    ROW_NUMBER() OVER (ORDER BY sc.total_streams DESC) AS rank,
+    s.id AS song_id,
+    s.title AS song_title,
+    a.display_name AS artist_display_name,
+    s.visibility AS song_visibility,
+    l.name AS label_name,
     sc.total_streams
-from stream_counts sc
-join songs s on s.id = sc.song_id
-join artists a on s.owner_artist_id = a.id
-left join labels l on l.id = s.published_by_label_id;
-
+FROM stream_counts sc
+JOIN songs s ON s.id = sc.song_id
+JOIN artists a ON s.owner_artist_id = a.id
+LEFT JOIN labels l ON l.id = s.published_by_label_id;
 
 
 -- view #7
