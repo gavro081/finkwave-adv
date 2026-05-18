@@ -294,15 +294,12 @@ select
     s.title as song_title,
     a.display_name as artist_display_name,
     s.visibility as song_visibility,
-    u.username as label_admin_username,
     l.name as label_name,
     sc.total_streams
 from stream_counts sc
 join songs s on s.id = sc.song_id
 join artists a on s.owner_artist_id = a.id
-left join label_admins la on s.published_by_label_admin_id = la.id
-left join labels l on l.id = la.label_id
-left join users u on u.id = la.user_id;
+left join labels l on l.id = s.published_by_label_id;
 
 
 
@@ -389,16 +386,12 @@ select
     s.title as song_title,
     a.display_name as artist_display_name,
     s.visibility as song_visibility,
-    u.username as label_admin_username,
     l.name as label_name,
     sc.total_streams
 from stream_counts sc
 join songs s on s.id = sc.song_id
 join artists a on s.owner_artist_id = a.id
-left join label_admins la on s.published_by_label_admin_id = la.id
-left join labels l on l.id = la.label_id
-left join users u on u.id = la.user_id;
-
+left join labels l on l.id = s.published_by_label_id;
 
 explain analyse
 select * from most_popular_songs_last_30_days_mv where rank=17;

@@ -105,18 +105,18 @@ CREATE TABLE Songs (
     visibility VARCHAR(64) NOT NULL,
     owner_artist_id BIGINT NOT NULL,
     published_by_artist_id INTEGER NULL,
-    published_by_label_admin_id INTEGER NULL,
+    published_by_label_id INTEGER NULL,
     genre VARCHAR(255) NULL,
 
     FOREIGN KEY (owner_artist_id) REFERENCES Artists(id),
     FOREIGN KEY (published_by_artist_id) REFERENCES Artists(id),
-    FOREIGN KEY (published_by_label_admin_id) REFERENCES Label_Admins(id),
+    FOREIGN KEY (published_by_label_id) REFERENCES Labels(id),
 
     CONSTRAINT visibility_constraint CHECK ( visibility in ('PUBLIC','PRIVATE','SHARED')),
 
     CHECK (
        (published_by_artist_id IS NOT NULL)::int +
-       (published_by_label_admin_id IS NOT NULL)::int = 1
+       (published_by_label_id IS NOT NULL)::int = 1
        ),
     CHECK (
        published_by_artist_id IS NULL OR published_by_artist_id = owner_artist_id
@@ -182,16 +182,16 @@ CREATE TABLE Albums (
     visibility VARCHAR(255) NOT NULL,
     owner_artist_id BIGINT NOT NULL,
     published_by_artist_id INTEGER NULL,
-    published_by_label_admin_id INTEGER NULL,
+    published_by_label_id INTEGER NULL,
 
     FOREIGN KEY (owner_artist_id) REFERENCES Artists(id),
     FOREIGN KEY (published_by_artist_id) REFERENCES Artists(id),
-    FOREIGN KEY (published_by_label_admin_id) REFERENCES Label_Admins(id),
+    FOREIGN KEY (published_by_label_id) REFERENCES Labels(id),
 
     CONSTRAINT visibility_constraint CHECK ( visibility in ('PUBLIC','PRIVATE','SHARED')),
     CHECK (
         (published_by_artist_id IS NOT NULL)::int +
-        (published_by_label_admin_id IS NOT NULL)::int = 1
+        (published_by_label_id IS NOT NULL)::int = 1
     ),
     CHECK (
         published_by_artist_id IS NULL OR published_by_artist_id = owner_artist_id

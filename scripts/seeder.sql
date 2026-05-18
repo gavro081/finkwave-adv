@@ -274,7 +274,7 @@ artist_full AS (
         af.artist_id,
         af.follower_count,
         al.label_id,
-        la.id AS label_admin_id
+        la.id AS published_by_label_id
     FROM artist_followers af
     LEFT JOIN artist_labels_active al
     ON af.artist_id = al.artist_id
@@ -304,7 +304,7 @@ INSERT INTO Songs (
     visibility,
     owner_artist_id,
     published_by_artist_id,
-    published_by_label_admin_id,
+    published_by_label_id,
     genre
 )
 SELECT
@@ -368,7 +368,7 @@ INSERT INTO Albums (
     visibility,
     owner_artist_id,
     published_by_artist_id,
-    published_by_label_admin_id
+    published_by_label_id
 )
 SELECT
     'Album_' || artist_id || '_' || album_num,
