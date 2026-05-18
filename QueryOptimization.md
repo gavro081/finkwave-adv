@@ -667,7 +667,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
  Planning Time: 0.092 ms
  Trigger for constraint songs_owner_artist_id_fkey: time=0.603 calls=1
  Trigger for constraint songs_published_by_artist_id_fkey: time=0.071 calls=1
- Trigger for constraint songs_published_by_label_admin_id_fkey: time=0.022 calls=1
+ Trigger for constraint songs_published_by_label_id_fkey: time=0.022 calls=1
  Execution Time: 1.307 ms
 ```
 ```
@@ -687,7 +687,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
  Planning Time: 0.045 ms
  Trigger for constraint songs_owner_artist_id_fkey: time=0.288 calls=1
  Trigger for constraint songs_published_by_artist_id_fkey: time=0.082 calls=1
- Trigger for constraint songs_published_by_label_admin_id_fkey: time=0.011 calls=1
+ Trigger for constraint songs_published_by_label_id_fkey: time=0.011 calls=1
  Execution Time: 0.627 ms
 ```
 ```
@@ -731,7 +731,7 @@ Subquery Scan on most_popular_songs_last_30_days  (cost=96713.63..122558.33 rows
                     ->  Parallel Hash Join  (cost=49328.85..92329.67 rows=43884 width=88) (actual time=1114.045..1407.397 rows=60789 loops=5)
                           Hash Cond: (s.owner_artist_id = a.id)
                           ->  Hash Left Join  (cost=46637.31..89522.94 rows=43884 width=84) (actual time=1076.395..1343.191 rows=60789 loops=5)
-                                Hash Cond: (s.published_by_label_admin_id = la.id)
+                                Hash Cond: (s.published_by_label_id = la.id)
                                 ->  Hash Join  (cost=43501.50..86090.08 rows=43884 width=48) (actual time=1071.308..1327.862 rows=60789 loops=5)
                                       Hash Cond: (s.id = sc.song_id)
                                       ->  Parallel Seq Scan on songs s  (cost=0.00..41308.08 rows=487808 width=40) (actual time=0.092..135.322 rows=390246 loops=5)
@@ -794,7 +794,7 @@ SELECT
 FROM stream_counts sc
 JOIN songs s ON s.id = sc.song_id
 JOIN artists a ON s.owner_artist_id = a.id
-LEFT JOIN label_admins la ON s.published_by_label_admin_id = la.id
+LEFT JOIN label_admins la ON s.published_by_label_id = la.id
 LEFT JOIN labels l ON l.id = la.label_id
 LEFT JOIN users u ON u.id = la.user_id;
 ```
@@ -925,7 +925,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
  Planning Time: 0.084 ms
  Trigger for constraint songs_owner_artist_id_fkey: time=0.524 calls=1
  Trigger for constraint songs_published_by_artist_id_fkey: time=0.081 calls=1
- Trigger for constraint songs_published_by_label_admin_id_fkey: time=0.024 calls=1
+ Trigger for constraint songs_published_by_label_id_fkey: time=0.024 calls=1
  Execution Time: 1.138 ms
 ```
 ```
@@ -945,7 +945,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
  Planning Time: 0.043 ms
  Trigger for constraint songs_owner_artist_id_fkey: time=0.240 calls=1
  Trigger for constraint songs_published_by_artist_id_fkey: time=0.079 calls=1
- Trigger for constraint songs_published_by_label_admin_id_fkey: time=0.021 calls=1
+ Trigger for constraint songs_published_by_label_id_fkey: time=0.021 calls=1
  Execution Time: 0.560 ms
 ```
 ```
@@ -1283,7 +1283,7 @@ UPDATE songs SET title = 'benchmark' WHERE id = 1;
  Planning Time: 0.081 ms
  Trigger for constraint songs_owner_artist_id_fkey: time=0.624 calls=1
  Trigger for constraint songs_published_by_artist_id_fkey: time=0.098 calls=1
- Trigger for constraint songs_published_by_label_admin_id_fkey: time=0.026 calls=1
+ Trigger for constraint songs_published_by_label_id_fkey: time=0.026 calls=1
  Execution Time: 1.384 ms
 ```
 ```
@@ -1302,7 +1302,7 @@ UPDATE songs SET title = 'benchmark' WHERE id = 1;
  Planning Time: 0.055 ms
  Trigger for constraint songs_owner_artist_id_fkey: time=0.283 calls=1
  Trigger for constraint songs_published_by_artist_id_fkey: time=0.036 calls=1
- Trigger for constraint songs_published_by_label_admin_id_fkey: time=0.011 calls=1
+ Trigger for constraint songs_published_by_label_id_fkey: time=0.011 calls=1
  Execution Time: 0.590 ms
 ```
 ```
