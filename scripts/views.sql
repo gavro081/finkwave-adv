@@ -85,25 +85,25 @@ FROM artist_listens;
 
 CREATE OR REPLACE VIEW most_popular_songs_last_30_days AS
 WITH stream_counts AS (
-    SELECT song_id, COUNT(*) AS total_streams
+    SELECT
+        song_id,
+        COUNT(*) AS total_streams
     FROM song_streams
     WHERE streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
     GROUP BY song_id
 )
 SELECT
+    ROW_NUMBER() OVER (ORDER BY sc.total_streams DESC) AS rank,
     s.id AS song_id,
     s.title AS song_title,
     a.display_name AS artist_display_name,
     s.visibility AS song_visibility,
-    u.username AS label_admin_username,
     l.name AS label_name,
     sc.total_streams
 FROM stream_counts sc
 JOIN songs s ON s.id = sc.song_id
 JOIN artists a ON s.owner_artist_id = a.id
-LEFT JOIN label_admins la ON s.published_by_label_admin_id = la.id
-LEFT JOIN labels l ON l.id = la.label_id
-LEFT JOIN users u ON u.id = la.user_id;
+LEFT JOIN labels l ON l.id = s.published_by_label_id;
 
 
 -- view #6 - label's artists information
@@ -238,30 +238,27 @@ FROM artist_listens;
 
 -- view #5
 
-CREATE MATERIALIZED VIEW most_popular_songs_last_30_days_mv AS
-WITH stream_counts AS (
-    SELECT
+create or replace view most_popular_songs_last_30_days_mv as
+with stream_counts as (
+    select
         song_id,
-        COUNT(*) AS total_streams
-    FROM song_streams
-    WHERE streamed_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
-    GROUP BY song_id
+        count(*) as total_streams
+    from song_streams
+    where streamed_at >= current_timestamp - interval '30 days'
+    group by song_id
 )
-SELECT
-    ROW_NUMBER() OVER (ORDER BY sc.total_streams DESC) AS rank,
-    s.id AS song_id,
-    s.title AS song_title,
-    a.display_name AS artist_display_name,
-    s.visibility AS song_visibility,
-    u.username AS label_admin_username,
-    l.name AS label_name,
+select
+    row_number() over (order by sc.total_streams desc) as rank,
+    s.id as song_id,
+    s.title as song_title,
+    a.display_name as artist_display_name,
+    s.visibility as song_visibility,
+    l.name as label_name,
     sc.total_streams
-FROM stream_counts sc
-JOIN songs s ON s.id = sc.song_id
-JOIN artists a ON s.owner_artist_id = a.id
-LEFT JOIN label_admins la ON s.published_by_label_admin_id = la.id
-LEFT JOIN labels l ON l.id = la.label_id
-LEFT JOIN users u ON u.id = la.user_id;
+from stream_counts sc
+join songs s on s.id = sc.song_id
+join artists a on s.owner_artist_id = a.id
+left join labels l on l.id = s.published_by_label_id;
 
 
 

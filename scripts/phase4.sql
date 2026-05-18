@@ -181,74 +181,71 @@ $$ LANGUAGE plpgsql STABLE;
 -- Тригер за проверка дали артистот и админот се дел од истата издавачка куќа при
 -- објавување на песна/албум
 
-create or replace function check_same_label()
-returns trigger
-language plpgsql
-as $$
-begin
-    if NEW.published_by_label_admin_id is not null then
+CREATE OR REPLACE FUNCTION check_same_label()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.published_by_label_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM artist_labels al
+            WHERE al.label_id = NEW.published_by_label_id
+              AND al.artist_id = NEW.owner_artist_id
+              AND al.active = TRUE
+        ) THEN
+            RAISE EXCEPTION 'Artist does not belong to this label';
+        END IF;
+    END IF;
 
-        if not exists (
-            select 1
-            from label_admins la
-            join artist_labels al on al.label_id = la.label_id
-            where la.id = NEW.published_by_label_admin_id
-              and al.artist_id = NEW.owner_artist_id
-              and al.active = true
-        ) then
-            raise exception 'Admin and artist do not belong to the same label';
-        end if;
-
-    end if;
-
-    return NEW;
-end;
+    RETURN NEW;
+END;
 $$;
 
 
-drop trigger if exists check_same_admin_artist_label on songs;
-drop trigger if exists check_same_admin_artist_label on albums;
+DROP TRIGGER IF EXISTS check_same_admin_artist_label ON songs;
+DROP TRIGGER IF EXISTS check_same_admin_artist_label ON albums;
 
-create or replace trigger check_same_admin_artist_label
-    BEFORE insert or update on songs
-    for each row
-    execute function check_same_label();
+CREATE OR REPLACE TRIGGER check_same_admin_artist_label
+    BEFORE INSERT OR UPDATE ON songs
+    FOR EACH ROW
+    EXECUTE FUNCTION check_same_label();
 
 
-create or replace trigger check_same_admin_artist_label
-    BEFORE insert or update on albums
-    for each row
-    execute function check_same_label();
+CREATE OR REPLACE TRIGGER check_same_admin_artist_label
+    BEFORE INSERT OR UPDATE ON albums
+    FOR EACH ROW
+    EXECUTE FUNCTION check_same_label();
 
 
 
 
 -- Тригер за автоматско ажурирање на припадноста на артистот кон издавачка куќа при негово префрлање во нова издавачка куќа
 
-create or replace function handle_new_artist_in_label()
-returns trigger
-language plpgsql
-as $$
-begin
-    update artist_labels
-    set end_date = now(),
-        active = false
-    where artist_id = NEW.artist_id
-      and active = true;
+CREATE OR REPLACE FUNCTION handle_new_artist_in_label()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE artist_labels
+    SET end_date = NOW(),
+        active = FALSE
+    WHERE artist_id = NEW.artist_id
+      AND active = TRUE;
 
-    NEW.active := true;
-    NEW.start_date := now();
+    NEW.active := TRUE;
+    NEW.start_date := NOW();
 
-    return NEW;
-end;
+    RETURN NEW;
+END;
 $$;
 
-drop trigger if exists handle_new_artist_in_label on artist_labels;
+DROP TRIGGER IF EXISTS handle_new_artist_in_label ON artist_labels;
 
-create trigger handle_new_artist_in_label
-before insert on artist_labels
-for each row
-execute function handle_new_artist_in_label();
+CREATE TRIGGER handle_new_artist_in_label
+BEFORE INSERT ON artist_labels
+FOR EACH ROW
+EXECUTE FUNCTION handle_new_artist_in_label();
 
 
 
@@ -256,83 +253,83 @@ execute function handle_new_artist_in_label();
 -- Процедура за објавување на албум со песни
 
 
-create or replace procedure upload_album_with_songs(
-    p_album_title varchar,
-    p_album_visibility varchar,
-    p_owner_artist_id bigint,
-    p_published_by_artist_id bigint,
-    p_published_by_label_admin_id bigint,
-    p_songs jsonb,
-    inout p_album_id bigint default null,
-    inout p_created_song_ids bigint[] default '{}'
+CREATE OR REPLACE PROCEDURE upload_album_with_songs(
+    p_album_title VARCHAR,
+    p_album_visibility VARCHAR,
+    p_owner_artist_id BIGINT,
+    p_published_by_artist_id BIGINT,
+    p_published_by_label_id BIGINT,
+    p_songs JSONB,
+    INOUT p_album_id BIGINT DEFAULT NULL,
+    INOUT p_created_song_ids BIGINT[] DEFAULT '{}'
 )
-language plpgsql
-as $$
-declare
-    v_song jsonb;
-    v_song_id bigint;
-    v_track_number int := 1;
-begin
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_song JSONB;
+    v_song_id BIGINT;
+    v_track_number INT := 1;
+BEGIN
     -- procedure-specific validation
-    if jsonb_typeof(p_songs) <> 'array' then
-        raise exception 'p_songs must be a JSON array';
-    end if;
+    IF jsonb_typeof(p_songs) <> 'array' THEN
+        RAISE EXCEPTION 'p_songs must be a JSON array';
+    END IF;
 
-    if jsonb_array_length(p_songs) = 0 then
-        raise exception 'Album must contain at least one song';
-    end if;
+    IF jsonb_array_length(p_songs) = 0 THEN
+        RAISE EXCEPTION 'Album must contain at least one song';
+    END IF;
 
     -- insert album
     -- your album trigger/check constraints will validate publisher rules
-    insert into albums (
+    INSERT INTO albums (
         title,
         visibility,
         owner_artist_id,
         published_by_artist_id,
-        published_by_label_admin_id
+        published_by_label_id
     )
-    values (
+    VALUES (
         p_album_title,
         p_album_visibility,
         p_owner_artist_id,
         p_published_by_artist_id,
-        p_published_by_label_admin_id
+        p_published_by_label_id
     )
-    returning id into p_album_id;
+    RETURNING id INTO p_album_id;
 
     -- insert songs and connect them to album_tracks
-    for v_song in
-        select value
-        from jsonb_array_elements(p_songs)
-    loop
-        if coalesce(v_song ->> 'title', '') = '' then
-            raise exception 'Every song must have a title';
-        end if;
+    FOR v_song IN
+        SELECT value
+        FROM jsonb_array_elements(p_songs)
+    LOOP
+        IF COALESCE(v_song ->> 'title', '') = '' THEN
+            RAISE EXCEPTION 'Every song must have a title';
+        END IF;
 
-        insert into songs (
+        INSERT INTO songs (
             title,
             visibility,
             owner_artist_id,
             published_by_artist_id,
-            published_by_label_admin_id,
+            published_by_label_id,
             genre
         )
-        values (
+        VALUES (
             v_song ->> 'title',
             p_album_visibility,
             p_owner_artist_id,
             p_published_by_artist_id,
-            p_published_by_label_admin_id,
+            p_published_by_label_id,
             v_song ->> 'genre'
         )
-        returning id into v_song_id;
+        RETURNING id INTO v_song_id;
 
-        insert into album_tracks (
+        INSERT INTO album_tracks (
             album_id,
             song_id,
             track_number
         )
-        values (
+        VALUES (
             p_album_id,
             v_song_id,
             v_track_number
@@ -340,38 +337,35 @@ begin
 
         p_created_song_ids := array_append(p_created_song_ids, v_song_id);
         v_track_number := v_track_number + 1;
-    end loop;
-end;
+    END LOOP;
+END;
 $$;
-
-
 
 
 -- Процедура за ажурирање на сите материјализирани погледи
 
-create or replace procedure refresh_all_materialized_views()
-language plpgsql
-as $$
-declare
-    v_mv record;
-begin
-    for v_mv in
-        select schemaname,
+CREATE OR REPLACE PROCEDURE refresh_all_materialized_views()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_mv RECORD;
+BEGIN
+    FOR v_mv IN
+        SELECT schemaname,
                matviewname
-        from pg_matviews
-        where schemaname = 'public'
-    loop
-        raise notice 'Refreshing %.%',
+        FROM pg_matviews
+        WHERE schemaname = 'public'
+    LOOP
+        RAISE NOTICE 'Refreshing %.%',
             v_mv.schemaname,
             v_mv.matviewname;
 
-        execute format(
-            'refresh materialized view %I.%I',
+        EXECUTE format(
+            'REFRESH MATERIALIZED VIEW %I.%I',
             v_mv.schemaname,
             v_mv.matviewname
         );
-    end loop;
-end;
+    END LOOP;
+END;
 $$;
-
 
