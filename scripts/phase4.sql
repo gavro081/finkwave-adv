@@ -252,35 +252,46 @@ EXECUTE FUNCTION handle_new_artist_in_label();
 
 -- Процедура за објавување на албум со песни
 
+INSERT INTO songs (
+    title,
+    visibility,
+    owner_artist_id,
+    published_by_artist_id,
+    published_by_label_id,
+    genre
+)
+VALUES
+('Song 1', 'PUBLIC', 22, 22, NULL, 'pop'),
+('Song 2', 'PUBLIC', 22, 22, NULL, 'pop'),
+('Song 3', 'PUBLIC', 22, 22, NULL, 'pop')
+RETURNING id;
 
-CREATE OR REPLACE PROCEDURE upload_album_with_songs(
+
+CREATE OR REPLACE PROCEDURE upload_album(
     p_album_title VARCHAR,
     p_album_visibility VARCHAR,
     p_owner_artist_id BIGINT,
     p_published_by_artist_id BIGINT,
     p_published_by_label_id BIGINT,
-    p_songs JSONB,
-    INOUT p_album_id BIGINT DEFAULT NULL,
-    INOUT p_created_song_ids BIGINT[] DEFAULT '{}'
+    p_song_ids BIGINT[],
+    INOUT p_album_id BIGINT DEFAULT NULL
 )
 LANGUAGE plpgsql
 AS $$
-DECLARE
-    v_song JSONB;
-    v_song_id BIGINT;
-    v_track_number INT := 1;
 BEGIN
-    -- procedure-specific validation
-    IF jsonb_typeof(p_songs) <> 'array' THEN
-        RAISE EXCEPTION 'p_songs must be a JSON array';
-    END IF;
-
-    IF jsonb_array_length(p_songs) = 0 THEN
+    IF p_song_ids IS NULL
+       OR array_length(p_song_ids, 1) IS NULL THEN
         RAISE EXCEPTION 'Album must contain at least one song';
     END IF;
 
-    -- insert album
-    -- your album trigger/check constraints will validate publisher rules
+    IF EXISTS (
+        SELECT 1
+        FROM albums
+        WHERE title = p_album_title
+    ) THEN
+        RAISE EXCEPTION 'Album with that title already exists';
+    END IF;
+
     INSERT INTO albums (
         title,
         visibility,
@@ -297,49 +308,20 @@ BEGIN
     )
     RETURNING id INTO p_album_id;
 
-    -- insert songs and connect them to album_tracks
-    FOR v_song IN
-        SELECT value
-        FROM jsonb_array_elements(p_songs)
-    LOOP
-        IF COALESCE(v_song ->> 'title', '') = '' THEN
-            RAISE EXCEPTION 'Every song must have a title';
-        END IF;
-
-        INSERT INTO songs (
-            title,
-            visibility,
-            owner_artist_id,
-            published_by_artist_id,
-            published_by_label_id,
-            genre
-        )
-        VALUES (
-            v_song ->> 'title',
-            p_album_visibility,
-            p_owner_artist_id,
-            p_published_by_artist_id,
-            p_published_by_label_id,
-            v_song ->> 'genre'
-        )
-        RETURNING id INTO v_song_id;
-
-        INSERT INTO album_tracks (
-            album_id,
-            song_id,
-            track_number
-        )
-        VALUES (
-            p_album_id,
-            v_song_id,
-            v_track_number
-        );
-
-        p_created_song_ids := array_append(p_created_song_ids, v_song_id);
-        v_track_number := v_track_number + 1;
-    END LOOP;
+    INSERT INTO album_tracks (
+        album_id,
+        song_id,
+        track_number
+    )
+    SELECT
+        p_album_id,
+        song_id,
+        ordinality
+    FROM unnest(p_song_ids)
+         WITH ORDINALITY AS t(song_id, ordinality);
 END;
 $$;
+
 
 
 -- Процедура за ажурирање на сите материјализирани погледи
