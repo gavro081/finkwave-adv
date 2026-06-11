@@ -219,7 +219,6 @@ CREATE OR REPLACE TRIGGER check_same_admin_artist_label
 
 
 
-
 -- Тригер за автоматско ажурирање на припадноста на артистот кон издавачка куќа при негово префрлање во нова издавачка куќа
 
 CREATE OR REPLACE FUNCTION handle_new_artist_in_label()
@@ -248,10 +247,7 @@ FOR EACH ROW
 EXECUTE FUNCTION handle_new_artist_in_label();
 
 
-
-
 -- Процедура за објавување на албум со песни
-
 
 CREATE OR REPLACE PROCEDURE upload_album_with_songs(
     p_album_title VARCHAR,
@@ -369,3 +365,69 @@ BEGIN
 END;
 $$;
 
+
+-- функција за агрегирање на податоци од изминати song_streams партиции во song_stream_counts_archive 
+-- и маркирање на тие месеци како затворени (податоците се користат во view #7)
+
+
+-- помошни табели
+
+CREATE TABLE IF NOT EXISTS song_stream_sealed_partitions (
+    partition_month date        PRIMARY KEY,   -- first day of the sealed month
+    sealed_at       timestamptz NOT NULL DEFAULT now()
+);
+
+-- cumulative frozen per-song counts across all sealed months
+CREATE TABLE IF NOT EXISTS song_stream_counts_archive (
+    song_id bigint PRIMARY KEY,
+    streams bigint NOT NULL
+);
+
+CREATE OR REPLACE FUNCTION seal_closed_song_streams_months()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    current_month date := date_trunc('month', current_date)::date;
+    r             record;
+    yr            int;
+    mo            int;
+    part_month    date;
+BEGIN
+    FOR r IN -- we loop over each song_streams partition
+        SELECT c.relname
+        FROM pg_inherits i
+        JOIN pg_class c ON c.oid = i.inhrelid
+        JOIN pg_class p ON p.oid = i.inhparent
+        WHERE p.relname = 'song_streams'
+          AND c.relname ~ '^song_streams_y\d{4}m\d{2}$'   -- skip the default partition
+        ORDER BY c.relname                                -- oldest first -> no holes
+    LOOP
+        yr         := substring(r.relname from 'y(\d{4})m')::int;
+        mo         := substring(r.relname from 'm(\d{2})$')::int;
+        part_month := make_date(yr, mo, 1);
+
+        -- only seal months that are fully over and not sealed yet
+        CONTINUE WHEN part_month >= current_month;
+        CONTINUE WHEN EXISTS (
+            SELECT 1 FROM song_stream_sealed_partitions s
+            WHERE s.partition_month = part_month
+        );
+
+        -- generate the per-song counts for this month and insert into the stream count archive. 
+        -- the where clause is added so the planner knows to use that particular partition only
+        EXECUTE format(
+            'INSERT INTO song_stream_counts_archive AS a (song_id, streams) '
+            'SELECT song_id, count(*) FROM %I GROUP BY song_id '
+            'ON CONFLICT (song_id) DO UPDATE SET streams = a.streams + EXCLUDED.streams',
+            r.relname
+        );
+
+        -- mark it sealed so we never count it again
+        INSERT INTO song_stream_sealed_partitions (partition_month)
+        VALUES (part_month);
+
+        RAISE NOTICE 'sealed month %', to_char(part_month, 'YYYY-MM');
+    END LOOP;
+END;
+$$;

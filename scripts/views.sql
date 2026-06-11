@@ -15,7 +15,6 @@ CREATE OR REPLACE VIEW user_follow_info AS
     FROM user_follows uf1
             LEFT JOIN user_followers uf2 ON uf1.user_id = uf2.user_id
             LEFT JOIN users u ON u.id = uf1.user_id
-    -- ORDER BY followers DESC
 );
 
 -- view #2 - most active users - users with the most streams in the last 30 days
@@ -29,7 +28,6 @@ CREATE OR REPLACE VIEW user_activity_last_30_days AS
     SELECT u.username, spu.*
     FROM users u
              JOIN streams_per_user spu ON u.id = spu.user_id
-    -- ORDER BY stream_count DESC
 );
 
 -- view #3 - average review grade and number of review per song
@@ -50,7 +48,6 @@ CREATE OR REPLACE VIEW song_average_grade AS
     FROM songs s
              JOIN avg_grade ag ON ag.song_id = s.id
              JOIN users u ON u.id = s.owner_artist_id
-    ORDER BY avg_grade DESC, num_reviews DESC
 );
 
 
@@ -125,6 +122,7 @@ ORDER BY l.name;
 
 -- view #7 - song details
 
+-- иницијална верзија, нема да работи со новите партиционирани табели, но секако ќе биде рефакторирана понатаму
 CREATE OR REPLACE VIEW songs_details AS
 WITH stream_counts AS (
     SELECT
@@ -160,9 +158,6 @@ LEFT JOIN playlist_counts pc ON pc.song_id = s.id
 LEFT JOIN song_average_grade_mv sag ON sag.song_id = s.id;
 
 
-
-
-
 -- view #8 - streams history
 
 CREATE OR REPLACE VIEW streams_history AS
@@ -177,8 +172,6 @@ FROM users u
 JOIN song_streams ss ON ss.user_id = u.id
 JOIN songs s ON s.id = ss.song_id
 JOIN playback_sessions ps ON ps.id = ss.playback_session_id;
-
-
 
 
 
@@ -263,13 +256,27 @@ LEFT JOIN labels l ON l.id = s.published_by_label_id;
 
 -- view #7
 
-CREATE MATERIALIZED VIEW song_stream_counts_mv AS
-SELECT
-    song_id,
-    COUNT(*) AS streams
-FROM song_streams
-GROUP BY song_id;
+DROP MATERIALIZED VIEW IF EXISTS song_stream_counts_mv CASCADE;
 
+CREATE MATERIALIZED VIEW song_stream_counts_mv AS
+WITH live AS (
+    -- where clause allows planner to only query the necessary partitions
+    SELECT ss.song_id, count(*) AS streams
+    FROM song_streams ss
+    WHERE ss.streamed_at >= COALESCE(
+              (SELECT max(partition_month) + interval '1 month'
+               FROM song_stream_sealed_partitions),
+              timestamp '-infinity'
+          )
+    GROUP BY ss.song_id
+)
+SELECT song_id, SUM(streams) AS streams
+FROM (
+    SELECT song_id, streams FROM song_stream_counts_archive -- baseline from above
+    UNION ALL
+    SELECT song_id, streams FROM live -- open (unsealed) month(s)
+) t
+GROUP BY song_id;
 
 CREATE MATERIALIZED VIEW song_playlist_counts_mv AS
 SELECT
@@ -279,7 +286,8 @@ FROM playlist_tracks
 GROUP BY song_id;
 
 
-CREATE OR REPLACE VIEW songs_details_mvs AS
+-- songs_details останува обичен view но сега прави join-ови со новите материјализирани погледи
+CREATE OR REPLACE VIEW songs_details AS
 SELECT
     s.title AS title,
     a.display_name AS artist_name,
