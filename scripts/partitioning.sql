@@ -1,3 +1,5 @@
+-- напредна тема 1: партиционирање на song_streams по streamed_at
+
 -- 1. create schema for archived partitions
 
 -- schema for storing detached partitions, ideally this would be 

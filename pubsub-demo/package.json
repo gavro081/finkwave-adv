@@ -1,0 +1,12 @@
+{
+  "name": "pubsub-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node listen.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
