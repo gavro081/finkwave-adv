@@ -101,7 +101,7 @@ SELECT
 FROM stream_counts sc
 JOIN songs s ON s.id = sc.song_id
 JOIN artists a ON s.owner_artist_id = a.id
-LEFT JOIN labels l ON l.id = s.published_by_label_admin_id
+LEFT JOIN labels l ON l.id = s.published_by_label_id
 WHERE s.deleted_at IS NULL;
 
 
