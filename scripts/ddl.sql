@@ -196,8 +196,6 @@ CREATE TABLE Albums (
     CHECK (
         published_by_artist_id IS NULL OR published_by_artist_id = owner_artist_id
     )
-
-    -- TODO: treba da se dodade trigger za da se proveri deka dokolku pesnata e objavena od label, artist owner-ot e momentalno so toj label
 );
 
 
@@ -231,9 +229,12 @@ CREATE TABLE Playlist_Tracks (
 CREATE TABLE Song_Contents (
     id BIGSERIAL PRIMARY KEY,
     song_id BIGINT NOT NULL,
-    content BYTEA NOT NULL UNIQUE,
+    content BYTEA NOT NULL,
     FOREIGN KEY (song_id) REFERENCES Songs(id) ON DELETE CASCADE
 );
+
+-- pravime unique index na hash-ot bidejki fajlovite go nadminuvaat limitot na btree index (~8KB)
+CREATE UNIQUE INDEX song_contents_content_md5_key ON Song_Contents (md5(content));
 
 CREATE TABLE Song_Relationships (
     id BIGSERIAL PRIMARY KEY,

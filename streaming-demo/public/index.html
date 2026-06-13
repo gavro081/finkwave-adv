@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+    <meta charset="utf-8" />
+    <title>finkwave streaming demo</title>
+    <style>
+        * {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>finkwave streaming demo</h1>
+    <p id="now"></p>
+    <!-- celata logika za stream-ot e na backend; ovde samo prakame request -->
+    <audio id="player" controls preload="none"></audio>
+    <p id="status"></p>
+
+    <script>
+        let songId = null;
+        let sessionId = null;
+        let lastSentMs = 0;   
+        let listenedMs = 0;   
+        let lastTime = 0;     
+
+        // najgolem delta megju dva timeupdates koj go smetame za vistinsko vreme.
+        // timeupdate se javuva ~4x/s pa realnite delti se ~250ms; pogolem skok = seek i ne go broime
+        const MAX_DELTA_MS = 1500;
+
+        async function init() {
+            const res = await fetch('/api/song');
+            if (!res.ok) {
+                document.getElementById('now').textContent =
+                    'нема песна со содржина во базата (изврши scripts/song_insertion.sql)';
+                return;
+            }
+            const song = await res.json();
+            songId = song.id;
+            document.getElementById('now').innerHTML =
+                `<b>${song.title}</b> (song_id ${song.id})`;
+            const player = document.getElementById('player');
+            player.src = `/stream/${song.id}`;
+
+            // initial play
+            player.addEventListener('play', async () => {
+                lastTime = player.currentTime; // za da ne se broi prviot delta
+                if (sessionId) return;
+                const r = await fetch('/api/play', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ songId }),
+                });
+                sessionId = (await r.json()).sessionId;
+                setStatus();
+            });
+
+            player.addEventListener('timeupdate', () => {
+                if (!sessionId) return;
+
+                // akumuliraj vreme
+                // mala i pozitiva delta -> valid
+                // golema/negativna delta -> invalid
+                const delta = (player.currentTime - lastTime) * 1000;
+                lastTime = player.currentTime;
+                if (delta > 0 && delta <= MAX_DELTA_MS) listenedMs += delta;
+
+                setStatus();
+
+                // heartbeat na ~5s
+                if (listenedMs - lastSentMs < 5000) return;
+                lastSentMs = listenedMs;
+                sendProgress(player);
+            });
+
+            // isprati i posledna sostojba koga se pauzira/zavrshuva
+            player.addEventListener('pause', () => sendProgress(player));
+            player.addEventListener('ended', () => sendProgress(player));
+        }
+
+        function sendProgress(player) {
+            if (!sessionId) return;
+            fetch('/api/progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId,
+                    listenedMs: Math.floor(listenedMs),
+                    positionMs: Math.floor(player.currentTime * 1000),
+                }),
+            });
+        }
+
+        function setStatus() {
+            const el = document.getElementById('status');
+            if (!el) return;
+            const s = Math.floor(listenedMs / 1000);
+            el.textContent = listenedMs >= 30000
+                ? `✓ слушано ≈${s}s — се брои како song stream`
+                : `слушано ≈${s}s / потребни 30s за да се брои`;
+        }
+
+        init();
+    </script>
+</body>
+</html>
