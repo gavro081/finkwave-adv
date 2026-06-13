@@ -71,7 +71,7 @@ CREATE TABLE User_Roles (
     user_id BIGINT NOT NULL,
     role_id BIGINT NOT NULL,
 
-    FOREIGN KEY (user_id) REFERENCES Users(id),
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
     FOREIGN KEY (role_id) REFERENCES Roles(id)
 );
 
@@ -107,6 +107,7 @@ CREATE TABLE Songs (
     published_by_artist_id INTEGER NULL,
     published_by_label_id INTEGER NULL,
     genre VARCHAR(255) NULL,
+    deleted_at TIMESTAMP NULL
 
     FOREIGN KEY (owner_artist_id) REFERENCES Artists(id),
     FOREIGN KEY (published_by_artist_id) REFERENCES Artists(id),
@@ -146,8 +147,8 @@ CREATE TABLE Artist_Labels (
     start_date DATE NULL,
     end_date DATE NULL,
 
-    FOREIGN KEY (artist_id) REFERENCES Artists(id),
-    FOREIGN KEY (label_id) REFERENCES Labels(id)
+    FOREIGN KEY (artist_id) REFERENCES Artists(id) ON DELETE CASCADE,
+    FOREIGN KEY (label_id) REFERENCES Labels(id) ON DELETE CASCADE
 
 );
 
@@ -169,8 +170,8 @@ CREATE TABLE Saved_Playlists (
     saved_by BIGINT NOT NULL,
     saved_at TIMESTAMP NOT NULL DEFAULT now(),
 
-    FOREIGN KEY (playlist_id) REFERENCES Playlists(id),
-    FOREIGN KEY (saved_by) REFERENCES Users(id),
+    FOREIGN KEY (playlist_id) REFERENCES Playlists(id) ON DELETE CASCADE,
+    FOREIGN KEY (saved_by) REFERENCES Users(id) ON DELETE CASCADE,
 
     UNIQUE (playlist_id, saved_by)
 );
@@ -205,7 +206,7 @@ CREATE TABLE Album_Tracks (
     song_id BIGINT NOT NULL,
     track_number INTEGER NOT NULL,
 
-    FOREIGN KEY (album_id) REFERENCES Albums(id),
+    FOREIGN KEY (album_id) REFERENCES Albums(id) ON DELETE CASCADE,
     FOREIGN KEY (song_id) REFERENCES Songs(id) ON DELETE CASCADE,
 
     UNIQUE (album_id, song_id),
@@ -221,7 +222,7 @@ CREATE TABLE Playlist_Tracks (
     added_at TIMESTAMP NOT NULL DEFAULT now(),
 
     FOREIGN KEY (song_id) REFERENCES Songs(id) ON DELETE CASCADE,
-    FOREIGN KEY (playlist_id) REFERENCES Playlists(id),
+    FOREIGN KEY (playlist_id) REFERENCES Playlists(id) ON DELETE CASCADE,
 
     UNIQUE (playlist_id, song_id)
 );
@@ -300,14 +301,14 @@ CREATE TABLE Reviews (
 CREATE TABLE Resource_Shares (
     id BIGSERIAL PRIMARY KEY,
 
-    song_id BIGINT REFERENCES songs(id),
-    album_id BIGINT REFERENCES albums(id),
-    playlist_id BIGINT REFERENCES playlists(id),
+    song_id BIGINT REFERENCES songs(id) ON DELETE CASCADE,
+    album_id BIGINT REFERENCES albums(id) ON DELETE CASCADE,
+    playlist_id BIGINT REFERENCES playlists(id) ON DELETE CASCADE,
 
-    user_id BIGINT REFERENCES users(id),
-    role_id BIGINT REFERENCES roles(id),
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    role_id BIGINT REFERENCES roles(id) ON DELETE CASCADE,
 
-    permission_id BIGINT REFERENCES permissions(id),
+    permission_id BIGINT REFERENCES permissions(id) ON DELETE CASCADE,
 
     resource_type TEXT GENERATED ALWAYS AS (
         CASE
