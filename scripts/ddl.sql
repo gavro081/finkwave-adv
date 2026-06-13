@@ -107,6 +107,7 @@ CREATE TABLE Songs (
     published_by_artist_id INTEGER NULL,
     published_by_label_id INTEGER NULL,
     genre VARCHAR(255) NULL,
+    deleted_at TIMESTAMP NULL
 
     FOREIGN KEY (owner_artist_id) REFERENCES Artists(id),
     FOREIGN KEY (published_by_artist_id) REFERENCES Artists(id),
