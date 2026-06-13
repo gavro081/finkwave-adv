@@ -36,7 +36,7 @@ CREATE OR REPLACE VIEW song_average_grade AS
 (
     WITH avg_grade AS (SELECT song_id,
                               AVG(r.grade)   AS avg_grade,
-                              COUNT(r.grade) AS num_reVIEWs
+                              COUNT(r.grade) AS num_reviews
                        FROM reVIEWs r
                        GROUP BY r.song_id)
     SELECT s.id       AS song_id,
@@ -44,10 +44,11 @@ CREATE OR REPLACE VIEW song_average_grade AS
            u.username AS released_by,
            u.id       AS user_id,
            ag.avg_grade,
-           ag.num_reVIEWs
+           ag.num_reviews
     FROM songs s
              JOIN avg_grade ag ON ag.song_id = s.id
              JOIN users u ON u.id = s.owner_artist_id
+    WHERE s.deleted_at IS NULL
 );
 
 
@@ -100,7 +101,8 @@ SELECT
 FROM stream_counts sc
 JOIN songs s ON s.id = sc.song_id
 JOIN artists a ON s.owner_artist_id = a.id
-LEFT JOIN labels l ON l.id = s.published_by_label_id;
+LEFT JOIN labels l ON l.id = s.published_by_label_admin_id
+WHERE s.deleted_at IS NULL;
 
 
 -- view #6 - label's artists information
@@ -114,10 +116,11 @@ SELECT
 FROM labels l
 JOIN artist_labels al ON al.label_id = l.id
 JOIN artists a ON a.id = al.artist_id
-LEFT JOIN songs s ON s.owner_artist_id = a.id
+LEFT JOIN songs s ON s.owner_artist_id = a.id AND s.deleted_at IS NULL
 LEFT JOIN follows f ON f.followed_user_id = a.user_id
 GROUP BY l.name, a.id, a.display_name
 ORDER BY l.name;
+
 
 
 -- view #7 - song details
@@ -155,7 +158,8 @@ LEFT JOIN album_tracks at ON at.song_id = s.id
 LEFT JOIN albums alb ON alb.id = at.album_id
 LEFT JOIN stream_counts sc ON sc.song_id = s.id
 LEFT JOIN playlist_counts pc ON pc.song_id = s.id
-LEFT JOIN song_average_grade_mv sag ON sag.song_id = s.id;
+LEFT JOIN song_average_grade_mv sag ON sag.song_id = s.id
+WHERE s.deleted_at IS NULL;
 
 
 -- view #8 - streams history
@@ -199,7 +203,8 @@ FROM (SELECT song_id,
       FROM reviews
       GROUP BY song_id) ag
 JOIN songs s ON s.id = ag.song_id
-JOIN users u ON u.id = s.owner_artist_id;
+JOIN users u ON u.id = s.owner_artist_id
+WHERE s.deleted_at IS NULL;
 
 -- view #4
 
