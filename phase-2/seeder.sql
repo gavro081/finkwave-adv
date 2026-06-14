@@ -273,13 +273,10 @@ artist_full AS (
     SELECT
         af.artist_id,
         af.follower_count,
-        al.label_id,
-        la.id AS published_by_label_id
+        al.label_id AS published_by_label_id
     FROM artist_followers af
     LEFT JOIN artist_labels_active al
-    ON af.artist_id = al.artist_id
-    LEFT JOIN Label_Admins la
-    ON la.label_id = al.label_id
+        ON af.artist_id = al.artist_id
 ),
 expanded AS (
     SELECT
@@ -309,22 +306,19 @@ INSERT INTO Songs (
 )
 SELECT
     'Song_' || artist_id || '_' || song_num,
-    -- first 25% of songs are private, the rest public
     CASE
         WHEN rn <= total_cnt * 0.25 THEN 'PRIVATE'
         ELSE 'PUBLIC'
     END,
     artist_id,
     CASE
-        WHEN label_id IS NULL THEN artist_id
+        WHEN published_by_label_id IS NULL THEN artist_id
         ELSE NULL
-        END,
-    CASE
-        WHEN label_id IS NOT NULL THEN label_admin_id
-        ELSE NULL
-        END,
+    END,
+    published_by_label_id,
     NULL
 FROM numbered;
+
 
 -- assign songs to albums by giving more albums to more popular artists
 WITH artist_followers AS (
