@@ -2,7 +2,7 @@
 -- испраќаме нотификација на персонален канал кога корисник добива нов следбеник
 
 
--- тригер функција: при INSERT во follows гради JSON payload
+-- тригер функција: при INSERT во follows се прави JSON payload
 -- со податоци за follower-от (преку join со users) и испраќа на каналот
 -- follows_user_<followed_user_id>
 

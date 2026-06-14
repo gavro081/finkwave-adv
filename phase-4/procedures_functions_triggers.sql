@@ -27,7 +27,7 @@ CREATE TRIGGER record_stream_from_session
 EXECUTE FUNCTION trg_record_stream_from_session();
 
 
--- тригер за проверка дека една песна не може да има релација (ремикс, препев, ...) со самата себе, 
+-- тригер за проверка дека една песна не може да има релација (ремикс, препев, ...) со самата себе 
 -- и дека дека нема да има дупликати од истата релација
 
 CREATE OR REPLACE FUNCTION trg_check_song_relationship()
@@ -88,7 +88,7 @@ DECLARE
     v_visibility  TEXT;
     v_is_shared   BOOLEAN := FALSE;
 BEGIN
-    -- scopes granted to this user for (action, resource_type)
+    -- site scopes dodeleni na ovoj user za torkata (action, resource_type)
     SELECT ARRAY_AGG(DISTINCT p.scope)
     INTO v_scopes
     FROM User_Roles ur
@@ -102,7 +102,7 @@ BEGIN
         RETURN FALSE;
     END IF;
 
-    -- resolve ownership + visibility per resource type
+    -- opredeli ownership + visibility za sekoj resource_type
     IF p_resource_type = 'SONG' THEN
         SELECT s.visibility,
                EXISTS (SELECT 1 FROM Artists a
@@ -126,12 +126,12 @@ BEGIN
         FROM Playlists pl WHERE pl.id = p_resource_id;
     END IF;
 
-    -- resource does not exist (or unknown resource_type): nothing to authorize
+    -- resursot ne postoi / nepoznat resource_type
     IF v_visibility IS NULL THEN
         RETURN FALSE;
     END IF;
 
-    -- ANY scope short-circuits everything (resource is known to exist)
+    -- ANY scope dozvoluva se, nema potreba od dopolnitelni proverki (dokolku resursot postoi)
     IF 'ANY' = ANY (v_scopes) THEN
         RETURN TRUE;
     END IF;
@@ -144,8 +144,8 @@ BEGIN
         RETURN TRUE;
     END IF;
 
-    -- SHARED: resource shared directly with the user or with one of
-    -- the roles the user holds, AND the share itself grants p_action
+    -- SHARED: resursot moze da e spodelen direktno so korisnikot 
+    -- ILI so edna od roljite koja korisnikot gi poseduva, I samiot share dozvoluva p_action
     IF 'SHARED' = ANY (v_scopes) THEN
         SELECT EXISTS (
             SELECT 1
@@ -178,7 +178,7 @@ $$ LANGUAGE plpgsql STABLE;
 
 
 
--- Тригер за проверка дали артистот и админот се дел од истата издавачка куќа при
+-- тригер за проверка дали артистот и админот се дел од истата издавачка куќа при
 -- објавување на песна/албум
 
 CREATE OR REPLACE FUNCTION check_same_label()
@@ -219,7 +219,7 @@ CREATE OR REPLACE TRIGGER check_same_admin_artist_label
 
 
 
--- Тригер за автоматско ажурирање на припадноста на артистот кон издавачка куќа при негово префрлање во нова издавачка куќа
+-- тригер за автоматско ажурирање на припадноста на артистот кон издавачка куќа при негово префрлање во нова издавачка куќа
 
 CREATE OR REPLACE FUNCTION handle_new_artist_in_label()
 RETURNS TRIGGER
@@ -247,7 +247,7 @@ FOR EACH ROW
 EXECUTE FUNCTION handle_new_artist_in_label();
 
 
--- Процедура за објавување на албум со песни
+-- процедура за објавување на албум со песни
 
 CREATE OR REPLACE PROCEDURE upload_album_with_songs(
     p_album_title VARCHAR,
@@ -306,7 +306,7 @@ $$;
 
 
 
--- Процедура за ажурирање на сите материјализирани погледи
+-- процедура за ажурирање на сите материјализирани погледи
 
 CREATE OR REPLACE PROCEDURE refresh_all_materialized_views()
 LANGUAGE plpgsql
@@ -337,15 +337,14 @@ $$;
 -- функција за агрегирање на податоци од изминати song_streams партиции во song_stream_counts_archive 
 -- и маркирање на тие месеци како затворени (податоците се користат во view #7)
 
-
 -- помошни табели
 
 CREATE TABLE IF NOT EXISTS song_stream_sealed_partitions (
-    partition_month date        PRIMARY KEY,   -- first day of the sealed month
+    partition_month date        PRIMARY KEY, -- prviot den od zatvoreniot mesecot
     sealed_at       timestamptz NOT NULL DEFAULT now()
 );
 
--- cumulative frozen per-song counts across all sealed months
+-- kumulativni brojaci po pesna za site do sega zatvoreni meseci
 CREATE TABLE IF NOT EXISTS song_stream_counts_archive (
     song_id bigint PRIMARY KEY,
     streams bigint NOT NULL
@@ -362,28 +361,28 @@ DECLARE
     mo            int;
     part_month    date;
 BEGIN
-    FOR r IN -- we loop over each song_streams partition
+    FOR r IN -- iterirame niz sekoja particija
         SELECT c.relname
         FROM pg_inherits i
         JOIN pg_class c ON c.oid = i.inhrelid
         JOIN pg_class p ON p.oid = i.inhparent
         WHERE p.relname = 'song_streams'
-          AND c.relname ~ '^song_streams_y\d{4}m\d{2}$'   -- skip the default partition
-        ORDER BY c.relname                                -- oldest first -> no holes
+          AND c.relname ~ '^song_streams_y\d{4}m\d{2}$'   -- isklucuva default particija
+        ORDER BY c.relname                                -- pocnuva od najstarata
     LOOP
         yr         := substring(r.relname from 'y(\d{4})m')::int;
         mo         := substring(r.relname from 'm(\d{2})$')::int;
         part_month := make_date(yr, mo, 1);
 
-        -- only seal months that are fully over and not sealed yet
+        -- zatvarame (seal-nuvame) samo meseci koi se celosno pominati i ne se zatvoreni do sega
         CONTINUE WHEN part_month >= current_month;
         CONTINUE WHEN EXISTS (
             SELECT 1 FROM song_stream_sealed_partitions s
             WHERE s.partition_month = part_month
         );
 
-        -- generate the per-song counts for this month and insert into the stream count archive. 
-        -- the where clause is added so the planner knows to use that particular partition only
+        -- generira per-song brojaci za segasniot mesec i gi vnesuva so stream count arhivata
+        -- koristenjeto na particiite tuka e eksplicitno (r e imeto na particioniranata tabela)
         EXECUTE format(
             'INSERT INTO song_stream_counts_archive AS a (song_id, streams) '
             'SELECT song_id, count(*) FROM %I GROUP BY song_id '
@@ -391,7 +390,7 @@ BEGIN
             r.relname
         );
 
-        -- mark it sealed so we never count it again
+        -- markiraj go kako sealed
         INSERT INTO song_stream_sealed_partitions (partition_month)
         VALUES (part_month);
 
@@ -420,6 +419,7 @@ $$;
 -- функција која враќа сегмент бајти од песната - главната (core) функција корисна за самиот стриминг
 --    p_start  - 0-indexed offset (како во HTTP Range), inclusive
 --    p_length - колку бајти да се вратат од таа позиција
+
 CREATE OR REPLACE FUNCTION song_content_chunk(
     p_song_id bigint,
     p_start   bigint,
@@ -439,6 +439,7 @@ $$;
 -- функции за менаџирање на сесии (playback_session)
 
 -- функција за започнување нова сесија (listened_ms = 0). враќа id-то на сесијата.
+
 CREATE OR REPLACE FUNCTION start_playback_session(
     p_user_id bigint,
     p_song_id bigint
@@ -453,6 +454,7 @@ $$;
 
 -- функција за update на сесијата согласно испратениот heartbeat од backend-от. 
 -- доколку listened_ms надмине 30_000 поставениот тригер ќе направи запис во song_streams
+
 CREATE OR REPLACE FUNCTION update_playback_progress(
     p_session_id      bigint,
     p_listened_ms     integer,
