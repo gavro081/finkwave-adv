@@ -632,3 +632,24 @@ VALUES (1, 10001), (2, 10001), (3, 10001);
 -- give VIEW PLAYLIST access to user 100003
 insert into resource_shares (playlist_id, user_id, permission_id)
 values (10001, 100003, 21);
+
+
+-- song insertion
+-- before running, replace absolute path with another path pointing to an mp3 file
+BEGIN;
+
+WITH new_song AS (
+    INSERT INTO songs (title, visibility, owner_artist_id, published_by_artist_id, genre)
+    VALUES ('Niz Mojot Zhivot', 'PUBLIC', 1, 1, 'rap')
+    RETURNING id
+)
+
+INSERT INTO song_contents (song_id, content)
+SELECT id,
+       pg_read_binary_file(
+            -- absolute path to song file
+           '/Users/Filip/Desktop/dev/faks-projects/finkwave-advanced/phase-5/streaming-demo/assets/song.mp3'
+       )
+FROM new_song;
+
+COMMIT;

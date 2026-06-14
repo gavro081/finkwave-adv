@@ -1,4 +1,3 @@
-pubsub-demo/node_modules/
 .DS_Store
 node_modules/
-streaming-demo/assets/*
+phase-5/streaming-demo/assets/*
