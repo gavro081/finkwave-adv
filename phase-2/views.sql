@@ -265,7 +265,7 @@ DROP MATERIALIZED VIEW IF EXISTS song_stream_counts_mv CASCADE;
 
 CREATE MATERIALIZED VIEW song_stream_counts_mv AS
 WITH live AS (
-    -- where clause allows planner to only query the necessary partitions
+    -- where klauza mu ovozmozuva na planerot da gi zema samo potrebnite particii
     SELECT ss.song_id, count(*) AS streams
     FROM song_streams ss
     WHERE ss.streamed_at >= COALESCE(
@@ -277,9 +277,9 @@ WITH live AS (
 )
 SELECT song_id, SUM(streams) AS streams
 FROM (
-    SELECT song_id, streams FROM song_stream_counts_archive -- baseline from above
+    SELECT song_id, streams FROM song_stream_counts_archive -- baseline od gore
     UNION ALL
-    SELECT song_id, streams FROM live -- open (unsealed) month(s)
+    SELECT song_id, streams FROM live -- otvoreni (unsealed) mesec(i)
 ) t
 GROUP BY song_id;
 

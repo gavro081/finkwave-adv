@@ -1043,42 +1043,53 @@ Execution Time: 3599.404 ms
 
 Бидејќи сепак имаме секвенцијално скенирање на табелата ```song_streams``` поради групирањето на слушања по песна и ова не може да се оптимизира со индекси, оптимизираме со материјализиран погледи, а индексите од горе ги бришеме:
 
-```
-create materialized view song_stream_counts_mv as
-select
+```sql
+CREATE MATERIALIZED VIEW song_stream_counts_mv AS
+WITH live AS (
+    SELECT ss.song_id, count(*) AS streams
+    FROM song_streams ss
+    WHERE ss.streamed_at >= COALESCE(
+              (SELECT max(partition_month) + interval '1 month'
+               FROM song_stream_sealed_partitions),
+              timestamp '-infinity'
+          )
+    GROUP BY ss.song_id
+)
+SELECT song_id, SUM(streams) AS streams
+FROM (
+    SELECT song_id, streams FROM song_stream_counts_archive
+    UNION ALL
+    SELECT song_id, streams FROM live 
+) t
+GROUP BY song_id;
+
+CREATE MATERIALIZED VIEW song_playlist_counts_mv AS
+SELECT
     song_id,
-    count(*) as streams
-from song_streams
-group by song_id;
+    COUNT(*) AS saved_in_playlists
+FROM playlist_tracks
+GROUP BY song_id;
 
 
-create materialized view song_playlist_counts_mv as
-select
-    song_id,
-    count(*) as saved_in_playlists
-from playlist_tracks
-group by song_id;
-
-
-create or replace view song_detailed_info_view_mvs as
-select
-    s.title as title,
-    a.display_name as artist_name,
-    coalesce(l.name, 'SOLO') as label_name,
-    coalesce(sc.streams, 0) as streams,
-    coalesce(alb.title, 'SINGLE') as album_title,
-    coalesce(pc.saved_in_playlists, 0) as saved_in_playlists,
+CREATE OR REPLACE VIEW songs_details AS
+SELECT
+    s.title AS title,
+    a.display_name AS artist_name,
+    COALESCE(l.name, 'SOLO') AS label_name,
+    COALESCE(sc.streams, 0) AS streams,
+    COALESCE(alb.title, 'SINGLE') AS album_title,
+    COALESCE(pc.saved_in_playlists, 0) AS saved_in_playlists,
     sag.num_reviews,
     ROUND(sag.avg_grade, 2) AS avg_grade
-from songs s
-left join artists a on a.id = s.owner_artist_id
-left join artist_labels al on al.artist_id = a.id
-left join labels l on l.id = al.label_id
-left join album_tracks at on at.song_id = s.id
-left join albums alb on alb.id = at.album_id
-left join song_stream_counts_mv sc on sc.song_id = s.id
-left join song_playlist_counts_mv pc on pc.song_id = s.id
-left join song_average_grade_mv sag on sag.song_id = s.id;
+FROM songs s
+LEFT JOIN artists a ON a.id = s.owner_artist_id
+LEFT JOIN artist_labels al ON al.artist_id = a.id
+LEFT JOIN labels l ON l.id = al.label_id
+LEFT JOIN album_tracks at ON at.song_id = s.id
+LEFT JOIN albums alb ON alb.id = at.album_id
+LEFT JOIN song_stream_counts_mv sc ON sc.song_id = s.id
+LEFT JOIN song_playlist_counts_mv pc ON pc.song_id = s.id
+LEFT JOIN song_average_grade_mv sag ON sag.song_id = s.id;
 
 drop index idx_songs_title;
 
@@ -1092,7 +1103,7 @@ drop index idx_artist_labels_artist_id;
 
 **333.811 ms**
 
-```
+```sql
 Gather  (cost=25188.45..57377.30 rows=2211 width=145) (actual time=113.872..333.525 rows=1683 loops=1)
   Workers Planned: 3
   Workers Launched: 3
@@ -1142,7 +1153,7 @@ Execution Time: 333.811 ms
 ### Влијание на индексот врз insert/update
 
 Тестирани прашалници:
-```
+```sql
 INSERT INTO artist_labels (artist_id, label_id, active, start_date)
 VALUES (494, 1, true, DATE '2020-01-01');
 
@@ -1154,7 +1165,7 @@ UPDATE artist_labels SET artist_id = (artist_id % 100000) + 1 WHERE id = 1;
 
 Прашалник кој го тестираме:
 
-```
+```sql
 SELECT *
 FROM streams_history
 WHERE username='adriana_klein_511'
