@@ -5,7 +5,7 @@
 ## 1. Анализа на поглед 1, добивање на бројот на следбеници и бројот на профили кои ги следи даден корисник ##
 
 Прашалниците кои ќе ги тестираме се следните:
-```
+```sql
 -- 1A: информации за конкретен корисник
 SELECT * FROM user_follow_info WHERE user_id = 5;
 
@@ -17,7 +17,7 @@ SELECT * FROM user_follow_info ORDER BY followers DESC LIMIT 10;
 
 **1A - 18.639 ms**
 
-```
+```sql
  Nested Loop Left Join  (cost=0.84..2007.41 rows=1 width=41) (actual time=18.370..18.375 rows=1 loops=1)
    ->  Nested Loop Left Join  (cost=0.42..1998.96 rows=1 width=24) (actual time=16.163..16.167 rows=1 loops=1)
          ->  GroupAggregate  (cost=0.42..8.45 rows=1 width=16) (actual time=0.099..0.101 rows=1 loops=1)
@@ -36,7 +36,7 @@ SELECT * FROM user_follow_info ORDER BY followers DESC LIMIT 10;
 
 **1B - 6055.326 ms**
 
-```
+```sql
  Limit  (cost=193416.23..193416.26 rows=10 width=41) (actual time=6013.127..6013.139 rows=10 loops=1)
    ->  Sort  (cost=193416.23..207558.87 rows=5657054 width=41) (actual time=5995.646..5995.657 rows=10 loops=1)
          Sort Key: (COALESCE(uf2.followers, '0'::bigint)) DESC
@@ -65,7 +65,7 @@ SELECT * FROM user_follow_info ORDER BY followers DESC LIMIT 10;
 
 
 Веќе постои индекс на `(follower_user_id, followed_user_id)` поради unique constraint во ddl-от, па `follower_user_id` може да се земе од таму, но за да се земе `followed_user_id` мора да се скенира табелата секвенцијално. Затоа, го додаваме следниот индекс:
-```
+```sql
 CREATE INDEX idx_follows_followed_user_id ON follows(followed_user_id);
 ```
 
@@ -73,7 +73,7 @@ CREATE INDEX idx_follows_followed_user_id ON follows(followed_user_id);
 
 **1A - 3.993 ms** (беше 18.639 ms)
 
-```
+```sql
  Nested Loop Left Join  (cost=27.03..806.01 rows=1 width=41) (actual time=3.702..3.704 rows=1 loops=1)
    ->  Nested Loop Left Join  (cost=26.61..797.56 rows=1 width=24) (actual time=3.683..3.685 rows=1 loops=1)
          ->  GroupAggregate  (cost=0.42..8.45 rows=1 width=16) (actual time=0.097..0.098 rows=1 loops=1)
@@ -94,7 +94,7 @@ CREATE INDEX idx_follows_followed_user_id ON follows(followed_user_id);
 
 **1B - 1158.681 ms** (беше 6055.326 ms)
 
-```
+```sql
  Limit  (cost=190809.26..190809.28 rows=10 width=41) (actual time=1119.728..1119.739 rows=10 loops=1)
    ->  Sort  (cost=190809.26..204951.89 rows=5657054 width=41) (actual time=1104.495..1104.505 rows=10 loops=1)
          Sort Key: (COALESCE(uf2.followers, '0'::bigint)) DESC
@@ -124,7 +124,7 @@ CREATE INDEX idx_follows_followed_user_id ON follows(followed_user_id);
 ### Влијание на индексот врз insert/update
 
 Тестирани прашалници:
-```
+```sql
 INSERT INTO follows (follower_user_id, followed_user_id) VALUES (185508, 1);
 
 UPDATE follows SET followed_user_id = 1 WHERE id = 1;
@@ -132,7 +132,7 @@ UPDATE follows SET followed_user_id = 1 WHERE id = 1;
 
 **Без индекс - insert 1.120 ms, update 0.668 ms**
 
-```
+```sql
  Insert on follows  (cost=0.00..0.02 rows=0 width=0) (actual time=0.332..0.332 rows=0 loops=1)
    ->  Result  (cost=0.00..0.02 rows=1 width=32) (actual time=0.049..0.049 rows=1 loops=1)
  Planning Time: 0.108 ms
@@ -140,7 +140,7 @@ UPDATE follows SET followed_user_id = 1 WHERE id = 1;
  Trigger for constraint follows_followed_user_id_fkey: time=0.097 calls=1
  Execution Time: 1.120 ms
 ```
-```
+```sql
  Update on follows  (cost=0.41..8.43 rows=0 width=0) (actual time=0.182..0.182 rows=0 loops=1)
    ->  Index Scan using follows_pkey on follows  (cost=0.41..8.43 rows=1 width=14) (actual time=0.028..0.029 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -151,7 +151,7 @@ UPDATE follows SET followed_user_id = 1 WHERE id = 1;
 
 **Со индекс - insert 0.541 ms, update 0.761 ms**
 
-```
+```sql
  Insert on follows  (cost=0.00..0.02 rows=0 width=0) (actual time=0.172..0.172 rows=0 loops=1)
    ->  Result  (cost=0.00..0.02 rows=1 width=32) (actual time=0.029..0.029 rows=1 loops=1)
  Planning Time: 0.072 ms
@@ -159,7 +159,7 @@ UPDATE follows SET followed_user_id = 1 WHERE id = 1;
  Trigger for constraint follows_followed_user_id_fkey: time=0.030 calls=1
  Execution Time: 0.541 ms
 ```
-```
+```sql
  Update on follows  (cost=0.42..8.44 rows=0 width=0) (actual time=0.205..0.205 rows=0 loops=1)
    ->  Index Scan using follows_pkey on follows  (cost=0.42..8.44 rows=1 width=14) (actual time=0.028..0.029 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -172,7 +172,7 @@ UPDATE follows SET followed_user_id = 1 WHERE id = 1;
 ## 2. Анализа на поглед 2, најактивни корисници на платформата според бројот на слушања во изминатите 30 дена ##
 
 Прашалниците кои ќе ги тестираме се следните:
-```
+```sql
 -- 2A: активност на еден корисник
 SELECT * FROM user_activity_last_30_days WHERE user_id = 100376;
 
@@ -185,7 +185,7 @@ SELECT * FROM user_activity_last_30_days ORDER BY stream_count DESC LIMIT 10;
 
 **2A - 389.404 ms**
 
-```
+```sql
  Nested Loop  (cost=1000.42..128052.52 rows=1 width=33) (actual time=341.291..351.235 rows=1 loops=1)
    ->  Index Scan using users_pkey on users u  (cost=0.42..8.44 rows=1 width=25) (actual time=0.760..0.764 rows=1 loops=1)
          Index Cond: (id = 100376)
@@ -202,7 +202,7 @@ SELECT * FROM user_activity_last_30_days ORDER BY stream_count DESC LIMIT 10;
 
 **2B - 1976.733 ms**
 
-```
+```sql
 Limit  (cost=193729.83..193814.38 rows=10 width=162) (actual time=1965.655..1965.803 rows=10 loops=1)
   ->  Result  (cost=193729.83..5188284.34 rows=590722 width=162) (actual time=1953.440..1953.585 rows=10 loops=1)
         ->  Sort  (cost=193729.83..195206.63 rows=590722 width=16) (actual time=1953.266..1953.270 rows=10 loops=1)
@@ -229,7 +229,7 @@ Execution Time: 1976.733 ms
 
 Бидејќи `song_streams` нема индекс на `user_id`, за прашалник 2А потребно е секвенцијално скенирање за да се најдат стримовите за еден корисник. Затоа, додаваме индекс на таа колона:
 
-```
+```sql
 CREATE INDEX idx_song_streams_user_id ON song_streams(user_id);
 ```
 
@@ -237,7 +237,7 @@ CREATE INDEX idx_song_streams_user_id ON song_streams(user_id);
 
 **2A - 0.453 ms** (was 389.404 ms)
 
-```
+```sql
  Nested Loop  (cost=0.86..45.14 rows=1 width=33) (actual time=0.295..0.297 rows=1 loops=1)
    ->  Index Scan using users_pkey on users u  (cost=0.42..8.44 rows=1 width=25) (actual time=0.071..0.072 rows=1 loops=1)
          Index Cond: (id = 100376)
@@ -257,7 +257,7 @@ CREATE INDEX idx_song_streams_user_id ON song_streams(user_id);
 ### Влијание на индексот врз insert/update
 
 Тестирани прашалници:
-```
+```sql
 INSERT INTO song_streams (playback_session_id, song_id, streamed_at, user_id)
 VALUES (362881, 518859, now(), 910877);
 
@@ -266,7 +266,7 @@ UPDATE song_streams SET user_id = 910878 WHERE id = 1;
 
 **Без индекс - insert 1.343 ms, update 0.372 ms**
 
-```
+```sql
  Insert on song_streams  (cost=0.00..0.02 rows=0 width=0) (actual time=0.390..0.391 rows=0 loops=1)
    ->  Result  (cost=0.00..0.02 rows=1 width=40) (actual time=0.056..0.057 rows=1 loops=1)
  Planning Time: 0.076 ms
@@ -274,7 +274,7 @@ UPDATE song_streams SET user_id = 910878 WHERE id = 1;
  Trigger for constraint song_streams_song_id_fkey: time=0.412 calls=1
  Execution Time: 1.343 ms
 ```
-```
+```sql
  Update on song_streams  (cost=0.43..8.45 rows=0 width=0) (actual time=0.252..0.253 rows=0 loops=1)
    ->  Index Scan using song_streams_pkey on song_streams  (cost=0.43..8.45 rows=1 width=14) (actual time=0.037..0.042 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -284,7 +284,7 @@ UPDATE song_streams SET user_id = 910878 WHERE id = 1;
 
 **Со индекс - insert 0.632 ms, update 0.323 ms**
 
-```
+```sql
  Insert on song_streams  (cost=0.00..0.02 rows=0 width=0) (actual time=0.198..0.198 rows=0 loops=1)
    ->  Result  (cost=0.00..0.02 rows=1 width=40) (actual time=0.030..0.030 rows=1 loops=1)
  Planning Time: 0.049 ms
@@ -292,7 +292,7 @@ UPDATE song_streams SET user_id = 910878 WHERE id = 1;
  Trigger for constraint song_streams_song_id_fkey: time=0.184 calls=1
  Execution Time: 0.632 ms
 ```
-```
+```sql
  Update on song_streams  (cost=0.43..8.45 rows=0 width=0) (actual time=0.246..0.246 rows=0 loops=1)
    ->  Index Scan using song_streams_pkey on song_streams  (cost=0.43..8.45 rows=1 width=14) (actual time=0.040..0.042 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -304,7 +304,7 @@ UPDATE song_streams SET user_id = 910878 WHERE id = 1;
 
 Прашалниците кои ќе ги тестираме се следните:
 
-```
+```sql
 -- 3A: просечна оценка за една песна
 SELECT * FROM song_average_grade WHERE song_id = 1;
 
@@ -316,7 +316,7 @@ SELECT * FROM song_average_grade ORDER BY avg_grade DESC, num_reviews DESC LIMIT
 
 **3A - 705.179 ms**
 
-```
+```sql
  Nested Loop  (cost=1000.85..136433.74 rows=1 width=86) (actual time=645.720..658.140 rows=1 loops=1)
    ->  Nested Loop  (cost=1000.43..136425.30 rows=1 width=69) (actual time=645.601..658.019 rows=1 loops=1)
          ->  Index Scan using songs_pkey on songs s  (cost=0.43..8.45 rows=1 width=29) (actual time=0.191..0.196 rows=1 loops=1)
@@ -337,7 +337,7 @@ SELECT * FROM song_average_grade ORDER BY avg_grade DESC, num_reviews DESC LIMIT
 
 **3B - 20559.318 ms**
 
-```
+```sql
  Limit  (cost=1696797.46..1696797.48 rows=10 width=86) (actual time=20499.331..20499.476 rows=10 loops=1)
    ->  Sort  (cost=1696797.46..1701259.58 rows=1784848 width=86) (actual time=20067.449..20067.593 rows=10 loops=1)
          Sort Key: ag.avg_grade DESC, ag.num_reviews DESC
@@ -369,12 +369,12 @@ SELECT * FROM song_average_grade ORDER BY avg_grade DESC, num_reviews DESC LIMIT
 
 Во 3А имаме секвенцијално скенирање на `reviews` табелата за да се земат `(song_id, grade)`. Прво пробавме да додадеме индекс на `reviews(song_id)`, но планерот го игнорираше индексот бидејќи секако ќе беше потребно скенирање на табелата за да се земе `grade` колоната. Затоа можеме да воведеме сложен индекс кој ќе ги содржи сите потребни колони и ќе му овозможи на планерот да користи Index Only Scan.
 
-```
+```sql
 CREATE INDEX idx_reviews_song_id_grade ON reviews(song_id, grade);
 ```
 **3A - 0.630 ms** (was 705.179 ms)
 
-```
+```sql
  Nested Loop  (cost=1.29..41.49 rows=1 width=86) (actual time=0.260..0.263 rows=1 loops=1)
    ->  Nested Loop  (cost=0.86..33.05 rows=1 width=69) (actual time=0.215..0.218 rows=1 loops=1)
          ->  Index Scan using songs_pkey on songs s  (cost=0.43..8.45 rows=1 width=29) (actual time=0.052..0.053 rows=1 loops=1)
@@ -397,7 +397,7 @@ CREATE INDEX idx_reviews_song_id_grade ON reviews(song_id, grade);
 
 **3A - 0.19 ms** 
 
-```
+```sql
  Index Scan using idx_sag_mv_song_id on song_average_grade_mv  (cost=0.43..8.45 rows=1 width=62) (actual time=0.074..0.075 rows=1 loops=1)
    Index Cond: (song_id = 1)
  Planning Time: 1.116 ms
@@ -406,7 +406,7 @@ CREATE INDEX idx_reviews_song_id_grade ON reviews(song_id, grade);
 
 **3B - 0.25 ms**
 
-```
+```sql
  Limit  (cost=0.43..1.23 rows=10 width=718) (actual time=0.081..0.209 rows=10 loops=1)
    ->  Index Scan using idx_sag_mv_avg_grade on song_average_grade_mv  (cost=0.43..155226.26 rows=1939589 width=718) (actual time=0.080..0.205 rows=10 loops=1)
  Planning Time: 0.936 ms
@@ -418,7 +418,7 @@ CREATE INDEX idx_reviews_song_id_grade ON reviews(song_id, grade);
 Исто така вреди да се напомене дека во апликацискиот код ќе треба да имплементираме логика за повремено ажурирање на овие погледи, користејќи `REFRESH MATERIALIZED VIEW`, и дека еден ваков refresh трае ~45 секунди.
 
 Бидејќи користиме материјализиран поглед, **индексот го бришеме**:
-```
+```sql
 DROP INDEX idx_reviews_song_id_grade;
 ```
 
@@ -427,7 +427,7 @@ DROP INDEX idx_reviews_song_id_grade;
 
 Прашалник кој ќе го тестираме:
 
-```
+```sql
 SELECT * FROM artist_popularity_last_30_days WHERE artist_display_name='Rush';
 ```
 
@@ -435,7 +435,7 @@ SELECT * FROM artist_popularity_last_30_days WHERE artist_display_name='Rush';
 
 **5295.544 ms**
 
-``` 
+```sql
  Subquery Scan on artist_popularity_last_30_days  (cost=258658.87..261658.85 rows=500 width=60) (actual time=5248.277..5288.441 rows=41 loops=1)
    Filter: ((artist_popularity_last_30_days.artist_display_name)::text = 'Rush'::text)
    Rows Removed by Filter: 99959
@@ -480,7 +480,7 @@ SELECT * FROM artist_popularity_last_30_days WHERE artist_display_name='Rush';
 
 Најбавните делови се секвенцијално скенирање на табелите ```song_streams``` и ```songs```, што можеме да го оптимизираме со индекс:
 
-```
+```sql
 CREATE INDEX idx_song_streams_streamed_at_song_id ON song_streams(streamed_at, song_id);
 CREATE INDEX idx_songs_owner_artist_id ON songs(owner_artist_id);
 ```
@@ -489,7 +489,7 @@ CREATE INDEX idx_songs_owner_artist_id ON songs(owner_artist_id);
 
 **2923.180 ms**
 
-```
+```sql
 WindowAgg  (cost=132657.36..134407.34 rows=100000 width=60) (actual time=2878.456..2912.811 rows=100000 loops=1)
   ->  Sort  (cost=132657.34..132907.34 rows=100000 width=52) (actual time=2878.421..2884.685 rows=100000 loops=1)
         Sort Key: artist_listens.total_listens DESC
@@ -525,7 +525,7 @@ Execution Time: 2923.180 ms
 
 Сега планерот го користи креираниот индекс за табелата ```song_streams```, но сепак табелата ```songs``` треба секвенцијално да се скенира за да се пресмета статистиката за артистите. Oптимизација правиме со материјализиран поглед, а индексите од горе ги бришеме:
 
-```
+```sql
 CREATE MATERIALIZED VIEW artist_popularity_last_30_days_mv AS
 WITH streams_count AS (
     SELECT ss.song_id, COUNT(*) AS cnt
@@ -557,7 +557,7 @@ DROP INDEX idx_songs_owner_artist_id;
 
 ### Време за извршување на прашалникот по додавање на материјализиран поглед
 
-```
+```sql
 Seq Scan on artist_popularity_last_30_days_mv  (cost=0.00..2082.00 rows=2 width=31) (actual time=0.210..9.704 rows=41 loops=1)
   Filter: ((artist_display_name)::text = 'Rush'::text)
   Rows Removed by Filter: 99959
@@ -572,7 +572,7 @@ Execution Time: 9.731 ms
 
 Прашалник кој ќе го тестираме:
 
-```
+```sql
 SELECT * FROM most_popular_songs_last_30_days WHERE rank=15;
 ```
 
@@ -580,7 +580,7 @@ SELECT * FROM most_popular_songs_last_30_days WHERE rank=15;
 
 **1682.017 ms**
 
-```
+```sql
 Subquery Scan on most_popular_songs_last_30_days  (cost=96713.63..122558.33 rows=878 width=96) (actual time=1471.660..1677.911 rows=1 loops=1)
   Filter: (most_popular_songs_last_30_days.rank = 17)
   Rows Removed by Filter: 16
@@ -640,7 +640,7 @@ Execution Time: 1682.017 ms
 
 За дополнителна оптимизација креираме материјализиран поглед:
 
-```
+```sql
 CREATE MATERIALIZED VIEW most_popular_songs_last_30_days_mv AS
 WITH stream_counts AS (
     SELECT
@@ -669,7 +669,7 @@ LEFT JOIN users u ON u.id = la.user_id;
 
 ### Време за извршување на прашалникот по додавање на материјализиран поглед
 
-```
+```sql
 Gather  (cost=1000.00..6167.16 rows=1 width=96) (actual time=0.381..671.251 rows=1 loops=1)
   Workers Planned: 2
   Workers Launched: 2
@@ -687,14 +687,16 @@ Execution Time: 671.277 ms
 
 Го тестираме прашалникот:
 
-``` SELECT * FROM label_artists_info WHERE label_name='Piercing Abyss Records';```
+```sql
+SELECT * FROM label_artists_info WHERE label_name='Piercing Abyss Records';
+```
 
 
 ### Време за извршување без индекси
 
 **3197.076 ms**
 
-```
+```sql
 Subquery Scan on label_artists_info  (cost=48955.19..49185.03 rows=1561 width=51) (actual time=3166.576..3196.926 rows=81 loops=1)
   ->  GroupAggregate  (cost=48955.19..49169.42 rows=1561 width=59) (actual time=3166.575..3196.914 rows=81 loops=1)
         Group Key: a.id
@@ -735,7 +737,7 @@ Execution Time: 3197.076 ms
 
 За да го оптимизираме секвенцијалното скенирање на табелите ```songs``` и ```artist_labels```, ги креираме индексите:
 
-```
+```sql
 CREATE INDEX idx_songs_owner_artist_id ON songs(owner_artist_id);
 CREATE INDEX idx_artist_labels_label_id_artist_id ON artist_labels(label_id, artist_id);
 ```
@@ -744,7 +746,7 @@ CREATE INDEX idx_artist_labels_label_id_artist_id ON artist_labels(label_id, art
 
 **5.213 ms**
 
-```
+```sql
 Subquery Scan on label_artists_info  (cost=571.17..618.00 rows=1561 width=51) (actual time=4.634..5.127 rows=81 loops=1)
   ->  GroupAggregate  (cost=571.17..602.39 rows=1561 width=59) (actual time=4.633..5.116 rows=81 loops=1)
         Group Key: a.id
@@ -778,7 +780,7 @@ Execution Time: 5.213 ms
 ### Влијание на индексот врз insert/update
 
 Тестирани прашалници:
-```
+```sql
 INSERT INTO songs (title, visibility, owner_artist_id, published_by_artist_id, genre)
 VALUES ('benchmark', 'PUBLIC', 494, 494, 'rock');
 
@@ -787,7 +789,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
 
 **Без индекс - insert 1.138 ms, update 0.883 ms**
 
-```
+```sql
  Insert on songs  (cost=0.00..0.01 rows=0 width=0) (actual time=0.482..0.482 rows=0 loops=1)
    ->  Result  (cost=0.00..0.01 rows=1 width=1202) (actual time=0.044..0.045 rows=1 loops=1)
  Planning Time: 0.084 ms
@@ -796,7 +798,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
  Trigger for constraint songs_published_by_label_id_fkey: time=0.024 calls=1
  Execution Time: 1.138 ms
 ```
-```
+```sql
  Update on songs  (cost=0.43..8.45 rows=0 width=0) (actual time=0.357..0.357 rows=0 loops=1)
    ->  Index Scan using songs_pkey on songs  (cost=0.43..8.45 rows=1 width=14) (actual time=0.032..0.035 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -807,7 +809,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
 
 **Со индекс - insert 0.560 ms, update 0.814 ms**
 
-```
+```sql
  Insert on songs  (cost=0.00..0.01 rows=0 width=0) (actual time=0.205..0.205 rows=0 loops=1)
    ->  Result  (cost=0.00..0.01 rows=1 width=1202) (actual time=0.018..0.019 rows=1 loops=1)
  Planning Time: 0.043 ms
@@ -816,7 +818,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
  Trigger for constraint songs_published_by_label_id_fkey: time=0.021 calls=1
  Execution Time: 0.560 ms
 ```
-```
+```sql
  Update on songs  (cost=0.43..8.45 rows=0 width=0) (actual time=0.342..0.343 rows=0 loops=1)
    ->  Index Scan using songs_pkey on songs  (cost=0.43..8.45 rows=1 width=14) (actual time=0.031..0.034 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -828,7 +830,7 @@ UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
 ### Влијание на индексот врз insert/update
 
 Тестирани прашалници:
-```
+```sql
 INSERT INTO artist_labels (artist_id, label_id, active, start_date)
 VALUES (494, 1, true, DATE '2020-01-01');
 
@@ -837,7 +839,7 @@ UPDATE artist_labels SET label_id = (label_id % 375) + 1 WHERE id = 1;
 
 **Без индекс - insert 1.219 ms, update 0.608 ms**
 
-```
+```sql
  Insert on artist_labels  (cost=0.00..0.01 rows=0 width=0) (actual time=0.330..0.331 rows=0 loops=1)
    ->  Result  (cost=0.00..0.01 rows=1 width=33) (actual time=0.040..0.041 rows=1 loops=1)
  Planning Time: 0.082 ms
@@ -845,7 +847,7 @@ UPDATE artist_labels SET label_id = (label_id % 375) + 1 WHERE id = 1;
  Trigger for constraint artist_labels_label_id_fkey: time=0.267 calls=1
  Execution Time: 1.219 ms
 ```
-```
+```sql
  Update on artist_labels  (cost=0.41..8.44 rows=0 width=0) (actual time=0.176..0.177 rows=0 loops=1)
    ->  Index Scan using artist_labels_pkey on artist_labels  (cost=0.41..8.44 rows=1 width=14) (actual time=0.030..0.031 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -856,7 +858,7 @@ UPDATE artist_labels SET label_id = (label_id % 375) + 1 WHERE id = 1;
 
 **Со индекс - insert 1.334 ms, update 0.596 ms**
 
-```
+```sql
  Insert on artist_labels  (cost=0.00..0.01 rows=0 width=0) (actual time=0.384..0.385 rows=0 loops=1)
    ->  Result  (cost=0.00..0.01 rows=1 width=33) (actual time=0.036..0.037 rows=1 loops=1)
  Planning Time: 0.078 ms
@@ -864,7 +866,7 @@ UPDATE artist_labels SET label_id = (label_id % 375) + 1 WHERE id = 1;
  Trigger for constraint artist_labels_label_id_fkey: time=0.276 calls=1
  Execution Time: 1.334 ms
 ```
-```
+```sql
  Update on artist_labels  (cost=0.41..8.44 rows=0 width=0) (actual time=0.182..0.182 rows=0 loops=1)
    ->  Index Scan using artist_labels_pkey on artist_labels  (cost=0.41..8.44 rows=1 width=14) (actual time=0.029..0.030 rows=1 loops=1)
          Index Cond: (id = 1)
@@ -878,7 +880,7 @@ UPDATE artist_labels SET label_id = (label_id % 375) + 1 WHERE id = 1;
 
 Прашалник кој го тестираме:
 
-```
+```sql
 SELECT * FROM songs_details WHERE title='Harmony';
 ```
 
@@ -886,7 +888,7 @@ SELECT * FROM songs_details WHERE title='Harmony';
 
 **93882.201 ms**
 
-```
+```sql
 Gather  (cost=230200.46..235882.48 rows=2211 width=121) (actual time=3427.813..93875.377 rows=1683 loops=1)
   Workers Planned: 3
   Workers Launched: 3
@@ -961,7 +963,7 @@ Execution Time: 93882.201 ms
 
 За оптимизирање на секвенцијалните скенирање на табелите ```artist_labels```, ```album_tracks``` и ```songs``` ги креираме индексите:
 
-```
+```sql
 CREATE INDEX idx_songs_title
 ON songs(title);
 
@@ -976,7 +978,7 @@ ON artist_labels(artist_id);
 
 **3599.404 ms**
 
-```
+```sql
 Gather  (cost=188600.68..198746.59 rows=2211 width=121) (actual time=3136.649..3592.763 rows=1683 loops=1)
   Workers Planned: 1
   Workers Launched: 1
@@ -1176,7 +1178,7 @@ ORDER BY streamed_at DESC;
 
 **0.404 ms**
 
-```
+```sql
 Sort  (cost=52.13..52.15 rows=7 width=58) (actual time=0.333..0.335 rows=15 loops=1)
   Sort Key: ss.streamed_at DESC
   Sort Method: quicksort  Memory: 26kB
@@ -1195,6 +1197,6 @@ Planning Time: 91.388 ms
 Execution Time: 0.404 ms
 ```
 
-Бидејќи се корситат индексите креирани за примарните клучеви, како и индексот ``` idx_song_streams_user_id ```, нема потреба за дополнителна оптимизација на прашалникот
+Бидејќи се корситат индексите креирани за примарните клучеви, како и индексот ```idx_song_streams_user_id ```, нема потреба за дополнителна оптимизација на прашалникот
 
 
