@@ -252,6 +252,8 @@ CREATE INDEX idx_song_streams_user_id ON song_streams(user_id);
 
 2Б остана непроменето - бидејќи прашалникот треба да направи комплексна агрегација на големи табели нема баш некој конкретен индекс што може да ги подобри перформансите. Доколку овој прашалник се извршува често во апликацијата, јасно е дека тоа може да доведе до проблеми. Ова можеме да го решиме на повеќе начини: со менување на погледот во материјализиран поглед, со кеширање и слично. Првиот пристап (материјализирани погледи) како решение ќе го погледнеме понатаму во оптимизацијата на други погледи, а конкретно за овој поглед ќе одиме со вториот пристап, поточно со кеширање кое ќе биде имплементирано во самиот апликациски код.
 
+Индексот не го бришеме бидејќи ке биде корисен и за други прашалници понатаму низ анализата.
+
 ### Влијание на индексот врз insert/update
 
 Тестирани прашалници:
@@ -415,50 +417,9 @@ CREATE INDEX idx_reviews_song_id_grade ON reviews(song_id, grade);
 
 Исто така вреди да се напомене дека во апликацискиот код ќе треба да имплементираме логика за повремено ажурирање на овие погледи, користејќи `REFRESH MATERIALIZED VIEW`, и дека еден ваков refresh трае ~45 секунди.
 
-### Влијание на индексот врз insert/update
-
-Тестирани прашалници:
+Бидејќи користиме материјализиран поглед, **индексот го бришеме**:
 ```
-INSERT INTO reviews (user_id, song_id, grade, comment)
-VALUES (910877, 518859, 5, 'benchmark');
-
-UPDATE reviews SET grade = 3 WHERE id = 1;
-```
-
-**Без индекс - insert 1.391 ms, update 0.268 ms**
-
-```
- Insert on reviews  (cost=0.00..0.02 rows=0 width=0) (actual time=0.381..0.381 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.02 rows=1 width=548) (actual time=0.059..0.059 rows=1 loops=1)
- Planning Time: 0.126 ms
- Trigger for constraint reviews_user_id_fkey: time=0.607 calls=1
- Trigger for constraint reviews_song_id_fkey: time=0.380 calls=1
- Execution Time: 1.391 ms
-```
-```
- Update on reviews  (cost=0.41..8.43 rows=0 width=0) (actual time=0.148..0.148 rows=0 loops=1)
-   ->  Index Scan using reviews_pkey on reviews  (cost=0.41..8.43 rows=1 width=10) (actual time=0.041..0.042 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.382 ms
- Execution Time: 0.268 ms
-```
-
-**Со индекс - insert 0.776 ms, update 0.374 ms**
-
-```
- Insert on reviews  (cost=0.00..0.02 rows=0 width=0) (actual time=0.220..0.220 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.02 rows=1 width=548) (actual time=0.031..0.032 rows=1 loops=1)
- Planning Time: 0.111 ms
- Trigger for constraint reviews_user_id_fkey: time=0.358 calls=1
- Trigger for constraint reviews_song_id_fkey: time=0.183 calls=1
- Execution Time: 0.776 ms
-```
-```
- Update on reviews  (cost=0.42..8.44 rows=0 width=0) (actual time=0.221..0.221 rows=0 loops=1)
-   ->  Index Scan using reviews_pkey on reviews  (cost=0.42..8.44 rows=1 width=10) (actual time=0.019..0.020 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.569 ms
- Execution Time: 0.374 ms
+DROP INDEX idx_reviews_song_id_grade;
 ```
 
 
@@ -562,7 +523,7 @@ JIT:
 Execution Time: 2923.180 ms
 ```
 
-Сега планерот го користи креираниот индекс за табелата ```song_streams```, но сепак табелата ```songs``` треба секвенцијално да се скенира за да се пресмета статистиката за артистите. Дополнителна оптимизација правиме со материјализиран поглед:
+Сега планерот го користи креираниот индекс за табелата ```song_streams```, но сепак табелата ```songs``` треба секвенцијално да се скенира за да се пресмета статистиката за артистите. Oптимизација правиме со материјализиран поглед, а индексите од горе ги бришеме:
 
 ```
 CREATE MATERIALIZED VIEW artist_popularity_last_30_days_mv AS
@@ -589,6 +550,9 @@ SELECT
     total_listens
 FROM artist_listens;
 
+DROP INDEX idx_song_streams_streamed_at_song_id;
+DROP INDEX idx_songs_owner_artist_id;
+
 ```
 
 ### Време за извршување на прашалникот по додавање на материјализиран поглед
@@ -601,104 +565,8 @@ Planning Time: 0.094 ms
 Execution Time: 9.731 ms
 ```
 
-Со материјализиран поглед добиваме <10 ms за читање.
-
-### Влијание на индексот врз insert/update
-
-Тестирани прашалници:
-```
-INSERT INTO song_streams (playback_session_id, song_id, streamed_at, user_id)
-VALUES (362881, 518859, now(), 910877);
-
-UPDATE song_streams SET streamed_at = streamed_at + INTERVAL '1 second' WHERE id = 1;
-```
-
-**Без индекс - insert 1.575 ms, update 0.344 ms**
-
-```
- Insert on song_streams  (cost=0.00..0.02 rows=0 width=0) (actual time=0.391..0.391 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.02 rows=1 width=40) (actual time=0.048..0.048 rows=1 loops=1)
- Planning Time: 0.080 ms
- Trigger for constraint song_streams_playback_session_id_fkey: time=0.555 calls=1
- Trigger for constraint song_streams_song_id_fkey: time=0.607 calls=1
- Execution Time: 1.575 ms
-```
-```
- Update on song_streams  (cost=0.43..8.45 rows=0 width=0) (actual time=0.230..0.231 rows=0 loops=1)
-   ->  Index Scan using song_streams_pkey on song_streams  (cost=0.43..8.45 rows=1 width=14) (actual time=0.033..0.034 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.532 ms
- Execution Time: 0.344 ms
-```
-
-**Со индекс - insert 0.699 ms, update 0.326 ms**
-
-```
- Insert on song_streams  (cost=0.00..0.02 rows=0 width=0) (actual time=0.202..0.202 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.02 rows=1 width=40) (actual time=0.029..0.029 rows=1 loops=1)
- Planning Time: 0.049 ms
- Trigger for constraint song_streams_playback_session_id_fkey: time=0.266 calls=1
- Trigger for constraint song_streams_song_id_fkey: time=0.220 calls=1
- Execution Time: 0.699 ms
-```
-```
- Update on song_streams  (cost=0.43..8.45 rows=0 width=0) (actual time=0.230..0.230 rows=0 loops=1)
-   ->  Index Scan using song_streams_pkey on song_streams  (cost=0.43..8.45 rows=1 width=14) (actual time=0.033..0.034 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.647 ms
- Execution Time: 0.326 ms
-```
-
-### Влијание на индексот врз insert/update
-
-Тестирани прашалници:
-```
-INSERT INTO songs (title, visibility, owner_artist_id, published_by_artist_id, genre)
-VALUES ('benchmark', 'PUBLIC', 494, 494, 'rock');
-
-UPDATE songs SET owner_artist_id = (owner_artist_id % 100000) + 1 WHERE id = 1;
-```
-
-**Без индекс - insert 1.307 ms, update 0.938 ms**
-
-```
- Insert on songs  (cost=0.00..0.01 rows=0 width=0) (actual time=0.585..0.585 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=1202) (actual time=0.051..0.051 rows=1 loops=1)
- Planning Time: 0.092 ms
- Trigger for constraint songs_owner_artist_id_fkey: time=0.603 calls=1
- Trigger for constraint songs_published_by_artist_id_fkey: time=0.071 calls=1
- Trigger for constraint songs_published_by_label_id_fkey: time=0.022 calls=1
- Execution Time: 1.307 ms
-```
-```
- Update on songs  (cost=0.42..8.45 rows=0 width=0) (actual time=0.376..0.376 rows=0 loops=1)
-   ->  Index Scan using songs_pkey on songs  (cost=0.42..8.45 rows=1 width=14) (actual time=0.030..0.034 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.607 ms
- Trigger for constraint songs_owner_artist_id_fkey: time=0.466 calls=1
- Execution Time: 0.938 ms
-```
-
-**Со индекс - insert 0.627 ms, update 0.836 ms**
-
-```
- Insert on songs  (cost=0.00..0.01 rows=0 width=0) (actual time=0.234..0.234 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=1202) (actual time=0.022..0.022 rows=1 loops=1)
- Planning Time: 0.045 ms
- Trigger for constraint songs_owner_artist_id_fkey: time=0.288 calls=1
- Trigger for constraint songs_published_by_artist_id_fkey: time=0.082 calls=1
- Trigger for constraint songs_published_by_label_id_fkey: time=0.011 calls=1
- Execution Time: 0.627 ms
-```
-```
- Update on songs  (cost=0.43..8.45 rows=0 width=0) (actual time=0.377..0.378 rows=0 loops=1)
-   ->  Index Scan using songs_pkey on songs  (cost=0.43..8.45 rows=1 width=14) (actual time=0.035..0.039 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.634 ms
- Trigger for constraint songs_owner_artist_id_fkey: time=0.368 calls=1
- Execution Time: 0.836 ms
-```
-
+Со материјализиран поглед добиваме <10 ms за читање. 
+Материјализираните погледи немаат никакво влијание на перформансите за запишување и ажурирање.
 
 ## 5. Анализа на поглед 5, број на слушања (популарност) на песните за изминатите 30 дена
 
@@ -1173,7 +1041,7 @@ JIT:
 Execution Time: 3599.404 ms
 ```
 
-Бидејќи сепак имаме секвенцијално скенирање на табелата ```song_streams``` поради групирањето на слушања по песна, дополнително оптимизираме со материјализиран погледи:
+Бидејќи сепак имаме секвенцијално скенирање на табелата ```song_streams``` поради групирањето на слушања по песна и ова не може да се оптимизира со индекси, оптимизираме со материјализиран погледи, а индексите од горе ги бришеме:
 
 ```
 create materialized view song_stream_counts_mv as
@@ -1211,6 +1079,12 @@ left join albums alb on alb.id = at.album_id
 left join song_stream_counts_mv sc on sc.song_id = s.id
 left join song_playlist_counts_mv pc on pc.song_id = s.id
 left join song_average_grade_mv sag on sag.song_id = s.id;
+
+drop index idx_songs_title;
+
+drop index idx_album_tracks_song_id;
+
+drop index idx_artist_labels_artist_id;
 ```
 
 
@@ -1269,143 +1143,10 @@ Execution Time: 333.811 ms
 
 Тестирани прашалници:
 ```
-INSERT INTO songs (title, visibility, owner_artist_id, published_by_artist_id, genre)
-VALUES ('benchmark', 'PUBLIC', 494, 494, 'rock');
-
-UPDATE songs SET title = 'benchmark' WHERE id = 1;
-```
-
-**Без индекс - insert 1.384 ms, update 0.487 ms**
-
-```
- Insert on songs  (cost=0.00..0.01 rows=0 width=0) (actual time=0.611..0.611 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=1202) (actual time=0.041..0.042 rows=1 loops=1)
- Planning Time: 0.081 ms
- Trigger for constraint songs_owner_artist_id_fkey: time=0.624 calls=1
- Trigger for constraint songs_published_by_artist_id_fkey: time=0.098 calls=1
- Trigger for constraint songs_published_by_label_id_fkey: time=0.026 calls=1
- Execution Time: 1.384 ms
-```
-```
- Update on songs  (cost=0.43..8.45 rows=0 width=0) (actual time=0.376..0.377 rows=0 loops=1)
-   ->  Index Scan using songs_pkey on songs  (cost=0.43..8.45 rows=1 width=522) (actual time=0.040..0.044 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.494 ms
- Execution Time: 0.487 ms
-```
-
-**Со индекс - insert 0.590 ms, update 0.426 ms**
-
-```
- Insert on songs  (cost=0.00..0.01 rows=0 width=0) (actual time=0.246..0.246 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=1202) (actual time=0.022..0.022 rows=1 loops=1)
- Planning Time: 0.055 ms
- Trigger for constraint songs_owner_artist_id_fkey: time=0.283 calls=1
- Trigger for constraint songs_published_by_artist_id_fkey: time=0.036 calls=1
- Trigger for constraint songs_published_by_label_id_fkey: time=0.011 calls=1
- Execution Time: 0.590 ms
-```
-```
- Update on songs  (cost=0.43..8.45 rows=0 width=0) (actual time=0.345..0.345 rows=0 loops=1)
-   ->  Index Scan using songs_pkey on songs  (cost=0.43..8.45 rows=1 width=522) (actual time=0.037..0.041 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.755 ms
- Execution Time: 0.426 ms
-```
-
-### Влијание на индексот врз insert/update
-
-Тестирани прашалници:
-```
-INSERT INTO album_tracks (album_id, song_id, track_number) VALUES (1, 1, 1);
-
-UPDATE album_tracks SET song_id = 1 WHERE id = 1;
-```
-
-**Без индекс - insert 1.416 ms, update 0.970 ms**
-
-```
- Insert on album_tracks  (cost=0.00..0.01 rows=0 width=0) (actual time=0.357..0.357 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=28) (actual time=0.046..0.047 rows=1 loops=1)
- Planning Time: 0.082 ms
- Trigger for constraint album_tracks_album_id_fkey: time=0.574 calls=1
- Trigger for constraint album_tracks_song_id_fkey: time=0.462 calls=1
- Execution Time: 1.416 ms
-```
-```
- Update on album_tracks  (cost=0.43..8.45 rows=0 width=0) (actual time=0.281..0.281 rows=0 loops=1)
-   ->  Index Scan using album_tracks_pkey on album_tracks  (cost=0.43..8.45 rows=1 width=14) (actual time=0.050..0.052 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.511 ms
- Trigger for constraint album_tracks_song_id_fkey: time=0.574 calls=1
- Execution Time: 0.970 ms
-```
-
-**Со индекс - insert 0.659 ms, update 0.755 ms**
-
-```
- Insert on album_tracks  (cost=0.00..0.01 rows=0 width=0) (actual time=0.204..0.204 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=28) (actual time=0.021..0.022 rows=1 loops=1)
- Planning Time: 0.051 ms
- Trigger for constraint album_tracks_album_id_fkey: time=0.271 calls=1
- Trigger for constraint album_tracks_song_id_fkey: time=0.172 calls=1
- Execution Time: 0.659 ms
-```
-```
- Update on album_tracks  (cost=0.43..8.45 rows=0 width=0) (actual time=0.204..0.205 rows=0 loops=1)
-   ->  Index Scan using album_tracks_pkey on album_tracks  (cost=0.43..8.45 rows=1 width=14) (actual time=0.029..0.030 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.664 ms
- Trigger for constraint album_tracks_song_id_fkey: time=0.438 calls=1
- Execution Time: 0.755 ms
-```
-
-### Влијание на индексот врз insert/update
-
-Тестирани прашалници:
-```
 INSERT INTO artist_labels (artist_id, label_id, active, start_date)
 VALUES (494, 1, true, DATE '2020-01-01');
 
 UPDATE artist_labels SET artist_id = (artist_id % 100000) + 1 WHERE id = 1;
-```
-
-**Без индекс - insert 1.106 ms, update 0.686 ms**
-
-```
- Insert on artist_labels  (cost=0.00..0.01 rows=0 width=0) (actual time=0.331..0.331 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=33) (actual time=0.036..0.036 rows=1 loops=1)
- Planning Time: 0.090 ms
- Trigger for constraint artist_labels_artist_id_fkey: time=0.539 calls=1
- Trigger for constraint artist_labels_label_id_fkey: time=0.219 calls=1
- Execution Time: 1.106 ms
-```
-```
- Update on artist_labels  (cost=0.41..8.44 rows=0 width=0) (actual time=0.175..0.175 rows=0 loops=1)
-   ->  Index Scan using artist_labels_pkey on artist_labels  (cost=0.41..8.44 rows=1 width=14) (actual time=0.030..0.031 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.534 ms
- Trigger for constraint artist_labels_artist_id_fkey: time=0.407 calls=1
- Execution Time: 0.686 ms
-```
-
-**Со индекс - insert 1.287 ms, update 0.688 ms**
-
-```
- Insert on artist_labels  (cost=0.00..0.01 rows=0 width=0) (actual time=0.386..0.387 rows=0 loops=1)
-   ->  Result  (cost=0.00..0.01 rows=1 width=33) (actual time=0.048..0.048 rows=1 loops=1)
- Planning Time: 0.148 ms
- Trigger for constraint artist_labels_artist_id_fkey: time=0.615 calls=1
- Trigger for constraint artist_labels_label_id_fkey: time=0.252 calls=1
- Execution Time: 1.287 ms
-```
-```
- Update on artist_labels  (cost=0.41..8.44 rows=0 width=0) (actual time=0.224..0.225 rows=0 loops=1)
-   ->  Index Scan using artist_labels_pkey on artist_labels  (cost=0.41..8.44 rows=1 width=14) (actual time=0.041..0.042 rows=1 loops=1)
-         Index Cond: (id = 1)
- Planning Time: 0.734 ms
- Trigger for constraint artist_labels_artist_id_fkey: time=0.343 calls=1
- Execution Time: 0.688 ms
 ```
 
 
