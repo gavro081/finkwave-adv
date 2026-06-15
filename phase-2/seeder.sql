@@ -338,24 +338,23 @@ artist_full AS (
     SELECT
         af.artist_id,
         af.follower_count,
-        al.label_id,
-        la.id AS label_admin_id
+        al.label_id AS published_by_label_id
     FROM artist_followers af
-    LEFT JOIN artist_labels_active al ON af.artist_id = al.artist_id
-    LEFT JOIN Label_Admins la ON la.label_id = al.label_id
+    LEFT JOIN artist_labels_active al
+        ON af.artist_id = al.artist_id
 ),
 expanded AS (
     SELECT
-    af.*,
-    generate_series(
-        1,
-        CASE
-            WHEN af.follower_count > 1200
-            THEN (5 + floor(random() * 6))::int   -- 5–10
-            ELSE (1 + floor(random() * 3))::int   -- 1–3
-        END
-    ) AS album_num
-FROM artist_full af
+        af.*,
+        generate_series(
+            1,
+            CASE
+                WHEN af.follower_count > 1200
+                THEN (5 + floor(random() * 6))::int
+                ELSE (1 + floor(random() * 3))::int
+            END
+        ) AS album_num
+    FROM artist_full af
 )
 INSERT INTO Albums (
     title,
@@ -368,20 +367,14 @@ SELECT
     'Album_' || artist_id || '_' || album_num,
     (ARRAY['PUBLIC','PRIVATE'])[floor(random()*2)+1],
     artist_id,
-    -- solo artists publish themselves
+
     CASE
-        WHEN label_id IS NULL THEN artist_id
+        WHEN published_by_label_id IS NULL THEN artist_id
         ELSE NULL
     END,
-    -- label artists published by label
-    CASE
-        WHEN label_id IS NOT NULL THEN label_admin_id
-        ELSE NULL
-    END
 
-FROM expanded
-WHERE (label_id IS NULL OR label_admin_id IS NOT NULL);
-
+    published_by_label_id
+FROM expanded;
 
 WITH album_requirements AS (
     -- how many tracks each album needs and get a sequence for the artist's albums
@@ -472,7 +465,6 @@ playlist_sample AS (
 ),
 
 
--- todo: check logic!
 expanded AS (
     SELECT
         p.playlist_id,
