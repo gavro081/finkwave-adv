@@ -37,7 +37,7 @@ CREATE OR REPLACE VIEW song_average_grade AS
     WITH avg_grade AS (SELECT song_id,
                               AVG(r.grade)   AS avg_grade,
                               COUNT(r.grade) AS num_reviews
-                       FROM reVIEWs r
+                       FROM reviews r
                        GROUP BY r.song_id)
     SELECT s.id       AS song_id,
            s.title    AS song_title,
